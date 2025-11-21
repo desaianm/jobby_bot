@@ -12,6 +12,7 @@ Jobby Bot is a multi-agent system that automates job searching, resume customiza
 - 📊 **Notion Tracking**: Track all applications in a Notion database
 - 🚀 **Parallel Processing**: Generate materials for multiple jobs simultaneously
 - 📝 **Session Logs**: Complete tracking of all agent actions and tool calls
+- 🔄 **PDF Conversion**: Convert existing PDF resumes to JSON format automatically
 
 ## 🏗️ Architecture
 
@@ -65,7 +66,18 @@ All agents communicate through the file system (`output/` folders) and are track
 
 4. **Set up your resume**
 
+   **Option A: Edit JSON directly**
+
    Edit `user_data/base_resume.json` with your information (follows [JSON Resume](https://jsonresume.org/) format)
+
+   **Option B: Convert from PDF**
+
+   If you have a PDF resume, use the conversion script:
+   ```bash
+   poetry run python scripts/pdf_to_json_resume.py path/to/your_resume.pdf
+   ```
+
+   This will use Claude to extract and structure your resume into JSON format automatically. Review and edit the generated `user_data/base_resume.json` file.
 
 5. **Configure preferences** (optional)
 
@@ -74,6 +86,48 @@ All agents communicate through the file system (`output/` folders) and are track
    - Blacklisted companies/keywords
    - Salary filters
    - Preferred tech stack
+
+## 🔄 PDF Resume Conversion
+
+If you have your resume in PDF format, Jobby Bot includes a utility to automatically convert it to JSON Resume format.
+
+### Usage
+
+```bash
+# Convert PDF to JSON Resume (saves to user_data/base_resume.json)
+poetry run python scripts/pdf_to_json_resume.py my_resume.pdf
+
+# Save to custom location
+poetry run python scripts/pdf_to_json_resume.py my_resume.pdf --output custom.json
+
+# Preview extracted text without converting
+poetry run python scripts/pdf_to_json_resume.py my_resume.pdf --preview-text
+```
+
+### How it works
+
+1. **Extract Text**: Uses `pdfplumber` to extract all text from your PDF
+2. **AI Conversion**: Uses Claude (Sonnet 4.5) to intelligently parse and structure the content
+3. **JSON Output**: Generates a valid JSON Resume with all sections properly formatted
+4. **Review**: You can review and edit the output before using it
+
+### What gets extracted
+
+- ✅ Contact information (name, email, phone, location)
+- ✅ Professional summary
+- ✅ Work experience with detailed bullet points
+- ✅ Education history
+- ✅ Skills organized by category
+- ✅ Projects (if present)
+- ✅ Certifications (if present)
+- ✅ Social profiles (LinkedIn, GitHub)
+
+### Tips
+
+- Make sure your PDF is text-based (not a scanned image)
+- Review the generated JSON for accuracy
+- Edit any missing or incorrect information
+- The AI is smart but may need manual corrections for complex layouts
 
 ## 🚀 Usage
 
