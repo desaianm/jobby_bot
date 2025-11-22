@@ -205,6 +205,10 @@ poetry run python -m jobby_bot.discord_bot
 4. Each Discord user gets their own isolated session
 
 **Discord Commands:**
+- `!jobby upload-resume` - Upload resume (PDF/TXT)
+- `!jobby set-preferences` - Update job search settings
+- `!jobby show-resume` - View resume summary
+- `!jobby show-preferences` - View settings
 - `!jobby start` - Show welcome message
 - `!jobby help` - Get detailed help
 - `!jobby end` - End your current session
@@ -221,6 +225,9 @@ The bot will search for new jobs based on your preferences and email matching on
 ```bash
 poetry run python test_discord.py
 ```
+
+**Host on Windows PC:**
+See [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) for a complete guide to running Jobby Bot 24/7 on a Windows PC at home with automatic startup.
 
 ### Example queries
 

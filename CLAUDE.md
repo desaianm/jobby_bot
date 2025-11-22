@@ -202,6 +202,9 @@ poetry run python -m jobby_bot.auto_job_monitor
 poetry run python test_discord.py
 ```
 
+### Windows Hosting
+For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) - includes service installation, auto-startup, and maintenance scripts.
+
 ### Debug Session Logs
 1. Check `logs/session_TIMESTAMP/transcript.txt` for conversation flow
 2. Check `tool_calls.jsonl` for tool invocation details

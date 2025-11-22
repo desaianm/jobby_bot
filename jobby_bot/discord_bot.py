@@ -4,8 +4,11 @@ import asyncio
 import os
 from pathlib import Path
 from typing import Dict, Optional
+import tempfile
+import json
 from dotenv import load_dotenv
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
@@ -19,6 +22,7 @@ load_dotenv()
 
 # Paths
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
 
 
 def load_prompt(filename: str) -> str:
@@ -54,6 +58,7 @@ class JobbySession:
         resume_writer_prompt = load_prompt("resume_writer.txt")
         cover_letter_prompt = load_prompt("cover_letter.txt")
         notion_agent_prompt = load_prompt("notion_agent.txt")
+        config_agent_prompt = load_prompt("config_agent.txt")
 
         # Initialize subagent tracker
         self.tracker = SubagentTracker(
@@ -107,6 +112,17 @@ class JobbySession:
                 ),
                 tools=["Bash", "Read", "Write"],
                 prompt=notion_agent_prompt,
+                model="haiku"
+            ),
+            "config-agent": AgentDefinition(
+                description=(
+                    "Use this agent when you need to update user preferences or save resume data. "
+                    "The config-agent updates preferences.json when user wants to change job search settings "
+                    "(location, remote preference, blacklist, tech stack, etc.) and updates base_resume.json "
+                    "when user provides their resume information. Does NOT search for jobs or create materials."
+                ),
+                tools=["Read", "Write"],
+                prompt=config_agent_prompt,
                 model="haiku"
             )
         }
@@ -193,7 +209,7 @@ class JobbyBot(commands.Bot):
         intents.dm_messages = True
 
         super().__init__(
-            command_prefix="!jobby ",
+            command_prefix="!",  # Keep for legacy support
             intents=intents,
             help_command=None
         )
@@ -205,7 +221,10 @@ class JobbyBot(commands.Bot):
 
     async def setup_hook(self):
         """Called when the bot is ready."""
+        # Sync slash commands
+        await self.tree.sync()
         print(f"🤖 Jobby Bot logged in as {self.user}")
+        print(f"✅ Slash commands synced")
 
         # Start auto job monitoring if enabled
         if self.enable_auto_monitor:
@@ -271,11 +290,22 @@ class JobbyBot(commands.Bot):
                 print(f"Error in session {message.author.id}: {e}")
 
 
-# Define commands
-@commands.command(name="start")
-async def start_session(ctx: commands.Context):
+# Import slash commands
+from jobby_bot.discord_commands import (
+    help_command,
+    end_command,
+    upload_resume_command,
+    set_preferences_command,
+    show_preferences_command,
+    show_resume_command
+)
+
+
+# Define start command inline
+@app_commands.command(name="start", description="Show welcome message and bot capabilities")
+async def start_command(interaction: discord.Interaction):
     """Start a new Jobby Bot session."""
-    await ctx.send(
+    await interaction.response.send_message(
         "👋 **Welcome to Jobby Bot!**\n\n"
         "I can help you with:\n"
         "🔍 Search for jobs across LinkedIn, Indeed, and Google\n"
@@ -283,67 +313,19 @@ async def start_session(ctx: commands.Context):
         "✍️ Write personalized cover letters\n"
         "📊 Track applications in Notion\n\n"
         "**How to use:**\n"
-        "• Send me a DM with your request\n"
-        "• Or mention me in a channel: `@Jobby Bot your message`\n\n"
-        "**Commands:**\n"
-        "• `!jobby start` - Show this message\n"
-        "• `!jobby end` - End your current session\n"
-        "• `!jobby help` - Get detailed help\n\n"
-        "Just start chatting with me to begin!"
+        "• Use `/` slash commands for setup and configuration\n"
+        "• Send me a DM or mention me for job searches and requests\n\n"
+        "**Slash Commands:**\n"
+        "• `/start` - Show this message\n"
+        "• `/help` - Get detailed help\n"
+        "• `/upload-resume` - Upload your resume (PDF/TXT)\n"
+        "• `/set-preferences` - Update job search settings\n"
+        "• `/show-resume` - View your current resume\n"
+        "• `/show-preferences` - View your settings\n"
+        "• `/end` - End your current session\n\n"
+        "Just mention me or DM me to start searching for jobs!",
+        ephemeral=True
     )
-
-
-@commands.command(name="end")
-async def end_session(ctx: commands.Context):
-    """End the current session for the user."""
-    bot = ctx.bot
-    user_id = ctx.author.id
-
-    if user_id in bot.sessions:
-        session = bot.sessions[user_id]
-        await session.cleanup()
-        del bot.sessions[user_id]
-        await ctx.send(
-            f"👋 Session ended!\n"
-            f"📁 Your session logs: `{session.session_dir}`"
-        )
-    else:
-        await ctx.send("No active session found. Use `!jobby start` to begin!")
-
-
-@commands.command(name="help")
-async def help_command(ctx: commands.Context):
-    """Show detailed help information."""
-    help_text = """
-📚 **Jobby Bot Help**
-
-**What I can do:**
-• Find jobs matching your criteria
-• Generate ATS-optimized resumes
-• Write personalized cover letters
-• Track applications in Notion
-
-**Example requests:**
-• "Find me software engineer jobs in San Francisco"
-• "Create a resume for this job posting: [URL]"
-• "Write a cover letter for the Data Scientist position at Google"
-• "Track this application in Notion"
-
-**Setup Requirements:**
-• Base resume in `user_data/base_resume.json` (JSON Resume format)
-• For Notion tracking: Set `NOTION_API_KEY` and `NOTION_DATABASE_ID`
-
-**Commands:**
-• `!jobby start` - Start a new session
-• `!jobby end` - End your current session
-• `!jobby help` - Show this help
-
-**Tips:**
-• Be specific about job criteria (location, role, experience level)
-• Provide job descriptions for best resume/cover letter results
-• Sessions persist until you use `!jobby end`
-"""
-    await ctx.send(help_text)
 
 
 async def main():
@@ -368,14 +350,19 @@ async def main():
     # Create and run bot
     bot = JobbyBot(enable_auto_monitor=enable_monitor)
 
-    # Register commands
-    bot.add_command(start_session)
-    bot.add_command(end_session)
-    bot.add_command(help_command)
+    # Register slash commands
+    bot.tree.add_command(start_command)
+    bot.tree.add_command(help_command)
+    bot.tree.add_command(end_command)
+    bot.tree.add_command(upload_resume_command)
+    bot.tree.add_command(set_preferences_command)
+    bot.tree.add_command(show_preferences_command)
+    bot.tree.add_command(show_resume_command)
 
     print("\n" + "="*60)
-    print("🤖 JOBBY BOT - Discord Integration")
+    print("🤖 JOBBY BOT - Discord Integration (Slash Commands)")
     print("="*60)
+    print("✅ Using modern Discord slash commands (/start, /help, etc.)")
     if enable_monitor:
         check_interval = int(os.getenv("JOB_CHECK_INTERVAL_MINUTES", "30"))
         print(f"🔄 Auto job monitoring: ENABLED (every {check_interval} minutes)")

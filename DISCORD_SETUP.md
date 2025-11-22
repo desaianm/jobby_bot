@@ -89,11 +89,43 @@ Starting Discord bot...
    @Jobby Bot find me data science jobs in New York
    ```
 
-### Commands
+### Slash Commands
 
-- `!jobby start` - Show welcome message and capabilities
-- `!jobby help` - Get detailed help
-- `!jobby end` - End your current session
+Jobby Bot uses modern Discord slash commands that appear with autocomplete when you type `/`:
+
+**Setup Commands:**
+- `/upload-resume` - Upload your resume (PDF/TXT) - attach file with command
+- `/set-preferences` - Update job search settings interactively
+- `/show-resume` - View your current resume summary
+- `/show-preferences` - View your current settings
+
+**Session Commands:**
+- `/start` - Show welcome message and capabilities
+- `/help` - Get detailed help
+- `/end` - End your current session
+
+### First Time Setup
+
+Before searching for jobs, configure your resume and preferences:
+
+1. **Upload your resume:**
+   - Type `/upload-resume`
+   - Select your resume file (PDF or TXT) when prompted
+   - Bot will parse and save it automatically
+
+2. **Set your preferences:**
+   - Type `/set-preferences`
+   - Fill in the interactive form with fields like:
+     - Location: Your City, State
+     - Search term: Your Job Title
+     - Remote: true/false
+     - Min salary: 100000
+
+3. **Verify your setup:**
+   - Type `/show-resume` to view your resume
+   - Type `/show-preferences` to view your settings
+
+Now you're ready to search for jobs!
 
 ### Example Interactions
 
@@ -121,6 +153,8 @@ Track this application in Notion: [job details]
 
 - ✅ Multi-user support - Each user gets their own session
 - ✅ Persistent sessions - Your conversation continues until you use `!jobby end`
+- ✅ Resume upload - Upload PDF or TXT resume files directly to Discord
+- ✅ Preference management - Configure job search settings via Discord commands
 - ✅ Session logging - All interactions are logged for review
 - ✅ Long message handling - Responses over 2000 characters are automatically split
 - ✅ Typing indicators - Shows when the bot is processing
