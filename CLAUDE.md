@@ -47,7 +47,9 @@ jobby_bot/
     ├── transcript.py
     ├── message_handler.py
     ├── email_sender.py
-    └── pdf_generator.py
+    ├── pdf_generator.py         # Main PDF interface
+    ├── chrome_pdf_generator.py  # Chrome CDP rendering (AIHawk method)
+    └── html_content_generator.py # HTML generation with smart formatting
 ```
 
 ### 4. Output Structure
@@ -145,6 +147,31 @@ class NewTool(Tool):
 2. **Register in tools/__init__.py**
 3. **Add to agent's allowed tools** in agent definition
 
+### PDF Generation (AIHawk Chrome CDP Approach)
+
+The system uses Chrome DevTools Protocol for pixel-perfect PDF rendering:
+
+**Workflow:**
+1. Plain text content → HTML generation (`html_content_generator.py`)
+2. HTML → Chrome headless browser (`chrome_pdf_generator.py`)
+3. Browser renders → `Page.printToPDF` CDP command
+4. Base64 PDF output → Save to file
+
+**Key Features:**
+- **Calibri font** for professional appearance
+- **Smart text normalization**: Converts all-caps paragraphs to sentence case
+- **Tech term preservation**: LangChain, Python, React keep proper casing
+- **ATS-friendly**: Clean HTML structure, no blue hyperlinks
+- **Pixel-perfect**: Exact browser rendering quality
+
+**Usage:**
+```python
+from jobby_bot.utils.pdf_generator import create_resume_pdf, create_cover_letter_pdf
+
+create_resume_pdf(text_content, "output/resumes/resume.pdf")
+create_cover_letter_pdf(text_content, "output/cover_letters/cover_letter.pdf")
+```
+
 ### Session Tracking
 
 All tool calls are automatically tracked via hooks:
@@ -241,7 +268,8 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 - `notion-client ^2.2.1` - Notion database integration
 
 ### Document Generation
-- `reportlab ^4.0.0` - ATS-friendly PDF creation for resumes/cover letters
+- `selenium ^4.38.0` - Chrome CDP for pixel-perfect PDF rendering (AIHawk approach)
+- `webdriver-manager ^4.0.2` - Automated ChromeDriver management
 - `pdfplumber ^0.11.0` - PDF text extraction for resume conversion
 
 ### Utilities
