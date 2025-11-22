@@ -7,9 +7,11 @@ Jobby Bot is a multi-agent system that automates job searching, resume customiza
 ## ✨ Features
 
 - 🔍 **Job Search**: Scrape jobs from LinkedIn, Indeed, and Google with advanced filtering
-- 📄 **Resume Customization**: Generate ATS-optimized resumes tailored to each job
-- ✍️ **Cover Letters**: Create personalized, professional cover letters
+- 📄 **Resume Customization**: Generate ATS-optimized resumes tailored to each job (PDF, Markdown, Text)
+- ✍️ **Cover Letters**: Create personalized, professional cover letters (PDF + Text)
+- 📧 **Email Automation**: Send job applications via email with resumes and cover letters attached
 - 📊 **Notion Tracking**: Track all applications in a Notion database
+- 💬 **Discord Integration**: Run as a Discord bot for multi-user access
 - 🚀 **Parallel Processing**: Generate materials for multiple jobs simultaneously
 - 📝 **Session Logs**: Complete tracking of all agent actions and tool calls
 - 🔄 **PDF Conversion**: Convert existing PDF resumes to JSON format automatically
@@ -22,6 +24,7 @@ Jobby Bot uses a **multi-agent architecture** with a lead orchestrator and speci
 - **Job Finder** (Claude Haiku 4.5): Searches and filters job listings
 - **Resume Writer** (Claude Haiku 4.5): Customizes resumes with ATS optimization
 - **Cover Letter Writer** (Claude Haiku 4.5): Generates personalized cover letters
+- **Email Agent** (Claude Haiku 4.5): Sends application emails with attachments
 - **Notion Agent** (Claude Haiku 4.5): Tracks applications in Notion
 
 All agents communicate through the file system (`output/` folders) and are tracked via hooks for complete observability.
@@ -60,6 +63,13 @@ All agents communicate through the file system (`output/` folders) and are track
    # Optional (for Notion tracking)
    NOTION_API_KEY=secret_xxx
    NOTION_DATABASE_ID=xxx
+
+   # Optional (for email automation)
+   SMTP_SERVER=smtp.gmail.com
+   SMTP_PORT=587
+   SENDER_EMAIL=your_email@gmail.com
+   SENDER_PASSWORD=your_app_password_here
+   RECIPIENT_EMAIL=your_email@gmail.com
    ```
 
    Get your Anthropic API key: https://console.anthropic.com/settings/keys
@@ -86,6 +96,47 @@ All agents communicate through the file system (`output/` folders) and are track
    - Blacklisted companies/keywords
    - Salary filters
    - Preferred tech stack
+
+6. **Set up email automation** (optional)
+
+   To enable automated email sending with job applications:
+
+   **For Gmail:**
+   - Enable 2-factor authentication on your Google account
+   - Generate an App Password: https://myaccount.google.com/apppasswords
+   - Use these settings in `.env`:
+     ```bash
+     SMTP_SERVER=smtp.gmail.com
+     SMTP_PORT=587
+     SENDER_EMAIL=your_email@gmail.com
+     SENDER_PASSWORD=your_app_password_here  # Use app password, not regular password
+     RECIPIENT_EMAIL=your_email@gmail.com
+     ```
+
+   **For Outlook/Hotmail:**
+   ```bash
+   SMTP_SERVER=smtp-mail.outlook.com
+   SMTP_PORT=587
+   SENDER_EMAIL=your_email@outlook.com
+   SENDER_PASSWORD=your_password
+   RECIPIENT_EMAIL=your_email@outlook.com
+   ```
+
+   **For other providers:**
+   - Contact your email provider for SMTP settings
+   - Common ports: 587 (TLS), 465 (SSL)
+
+   **Email features:**
+   - 📧 Individual emails per job with customized resume and cover letter attached
+   - 📊 Daily summary email with all applications and statistics
+   - 🎨 Professional HTML formatting with job details and apply links
+   - 📎 All PDFs attached for easy access
+
+   **Test your email configuration:**
+   ```bash
+   python test_email.py
+   ```
+   This will verify your SMTP settings and send a test email. Check your inbox to confirm it's working before running the full bot.
 
 ## 🔄 PDF Resume Conversion
 
@@ -131,10 +182,44 @@ poetry run python scripts/pdf_to_json_resume.py my_resume.pdf --preview-text
 
 ## 🚀 Usage
 
-### Start the bot
+### CLI Mode
+
+Start the interactive CLI bot:
 
 ```bash
 poetry run python -m jobby_bot.agent
+```
+
+### Discord Mode
+
+Run Jobby Bot on Discord for multi-user access:
+
+```bash
+poetry run python -m jobby_bot.discord_bot
+```
+
+**Setup Discord Bot:**
+1. See [DISCORD_SETUP.md](DISCORD_SETUP.md) for detailed setup instructions
+2. Add `DISCORD_BOT_TOKEN` to your `.env` file
+3. Interact via DMs or by mentioning the bot in channels
+4. Each Discord user gets their own isolated session
+
+**Discord Commands:**
+- `!jobby start` - Show welcome message
+- `!jobby help` - Get detailed help
+- `!jobby end` - End your current session
+
+**Auto Job Monitoring:**
+Enable automatic job checking every 30 minutes by setting:
+```bash
+ENABLE_AUTO_JOB_MONITOR=true
+JOB_CHECK_INTERVAL_MINUTES=30
+```
+The bot will search for new jobs based on your preferences and email matching ones automatically.
+
+**Test Discord Setup:**
+```bash
+poetry run python test_discord.py
 ```
 
 ### Example queries

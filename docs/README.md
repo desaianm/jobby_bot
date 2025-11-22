@@ -6,6 +6,8 @@ Welcome to the Jobby Bot documentation! This directory contains technical docume
 
 - **[CLAUDE.md](../CLAUDE.md)** - Main project documentation with development conventions, architecture, and best practices
 - **[README.md](../README.md)** - User-facing guide with installation, usage, and setup instructions
+- **[FEATURES.md](FEATURES.md)** - Complete feature documentation with examples and usage
+- **[EMAIL_SETUP.md](EMAIL_SETUP.md)** - Email automation setup guide for all providers
 - **[pyproject.toml](../pyproject.toml)** - Project dependencies and configuration
 
 ## Documentation Structure
@@ -30,8 +32,10 @@ Read [CLAUDE.md](../CLAUDE.md) to understand:
 ### Multi-Agent System
 Jobby Bot uses a lead orchestrator agent (Sonnet 4.5) that spawns specialized subagents (Haiku 4.5) for specific tasks:
 - **job-finder**: Searches jobs via JobSpy
-- **resume-writer**: Creates ATS-optimized resumes
-- **cover-letter**: Generates personalized cover letters
+- **resume-writer**: Creates ATS-optimized resumes (PDF, Markdown, Text)
+- **cover-letter**: Generates personalized cover letters (PDF, Text)
+- **email-agent**: Sends job emails with PDF attachments via SMTP
+- **config-agent**: Updates preferences and resume data
 - **notion-agent**: Tracks applications in Notion
 
 ### File-Based Communication

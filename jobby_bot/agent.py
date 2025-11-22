@@ -123,7 +123,7 @@ async def main():
         allowed_tools=["Task"],  # Lead agent ONLY uses Task tool
         agents=agents,
         hooks=hooks,
-        model="sonnet"  # claude-sonnet-4-5 for orchestration
+        model="haiku"  # claude-haiku-4-5 for orchestration
     )
 
     print("\n" + "="*60)

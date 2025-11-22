@@ -5,7 +5,7 @@
 # Core dependencies
 claude-agent-sdk>=0.1.0
 anthropic>=0.39.0
-
+discord.py>=2.0.0
 # Job search
 python-jobspy
 

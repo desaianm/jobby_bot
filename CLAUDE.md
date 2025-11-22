@@ -28,28 +28,34 @@
 ### 3. File Organization
 ```
 jobby_bot/
-├── agent.py              # Main orchestrator entry point
+├── agent.py              # CLI orchestrator entry point
+├── discord_bot.py        # Discord bot interface with auto-monitoring
+├── auto_job_monitor.py   # Automated job checking and matching
 ├── prompts/              # Agent system prompts (txt files)
 │   ├── lead_agent.txt
 │   ├── job_finder.txt
 │   ├── resume_writer.txt
 │   ├── cover_letter.txt
-│   └── notion_agent.txt
+│   ├── email_agent.txt
+│   ├── notion_agent.txt
+│   └── config_agent.txt
 ├── tools/                # Custom tools for agents
 │   ├── jobspy_tool.py
 │   └── notion_tool.py
 └── utils/                # Shared utilities
     ├── subagent_tracker.py
     ├── transcript.py
-    └── message_handler.py
+    ├── message_handler.py
+    ├── email_sender.py
+    └── pdf_generator.py
 ```
 
 ### 4. Output Structure
 ```
 output/
 ├── job_listings/         # CSV files from JobSpy
-├── resumes/             # Generated resumes (md + txt)
-└── cover_letters/       # Generated cover letters
+├── resumes/             # Generated resumes (pdf + md + txt)
+└── cover_letters/       # Generated cover letters (pdf + txt)
 
 logs/
 └── session_TIMESTAMP/
@@ -74,18 +80,29 @@ logs/
 
 ### Resume Writer Agent
 - **Model**: claude-haiku-4-5
-- **Tools**: `Read`, `Write`
+- **Tools**: `Read`, `Write`, `Bash`
 - **Input**: `user_data/base_resume.json` (JSON Resume format)
-- **Output**: `output/resumes/job_N_resume.{md,txt}`
+- **Output**: `output/resumes/job_N_resume.{pdf,md,txt}` - ATS optimization with keyword extraction
 - **Prompt**: `prompts/resume_writer.txt`
-- **Key Feature**: ATS optimization with keyword extraction
 
 ### Cover Letter Agent
 - **Model**: claude-haiku-4-5
-- **Tools**: `Read`, `Write`
-- **Output**: `output/cover_letters/job_N_cover_letter.txt`
+- **Tools**: `Read`, `Write`, `Bash`
+- **Output**: `output/cover_letters/job_N_cover_letter.{pdf,txt}` - 3-paragraph professional letter
 - **Prompt**: `prompts/cover_letter.txt`
-- **Format**: 3-paragraph professional letter
+
+### Email Agent
+- **Model**: claude-haiku-4-5
+- **Tools**: `Bash`, `Read`
+- **Role**: Send individual job emails + daily summary via SMTP with PDF attachments
+- **Requires**: `SMTP_SERVER`, `SMTP_PORT`, `SENDER_EMAIL`, `SENDER_PASSWORD`, `RECIPIENT_EMAIL`
+- **Prompt**: `prompts/email_agent.txt`
+
+### Config Agent
+- **Model**: claude-haiku-4-5
+- **Tools**: `Read`, `Write`
+- **Role**: Update preferences.json and base_resume.json when user provides config changes
+- **Prompt**: `prompts/config_agent.txt`
 
 ### Notion Agent
 - **Model**: claude-haiku-4-5
@@ -151,19 +168,38 @@ ANTHROPIC_API_KEY=sk-ant-xxx  # Get from console.anthropic.com
 
 ### Optional Variables
 ```bash
-NOTION_API_KEY=secret_xxx      # For application tracking
-NOTION_DATABASE_ID=xxx          # Your Notion database ID
+DISCORD_BOT_TOKEN=xxx                   # Discord bot token (for Discord mode)
+ENABLE_AUTO_JOB_MONITOR=true            # Enable auto job checking (Discord mode)
+JOB_CHECK_INTERVAL_MINUTES=30           # How often to check for jobs (default: 30)
+NOTION_API_KEY=secret_xxx               # For application tracking
+NOTION_DATABASE_ID=xxx                  # Your Notion database ID
+SMTP_SERVER=smtp.gmail.com              # Email automation
+SMTP_PORT=587                           # Standard TLS port
+SENDER_EMAIL=your@email.com             # Email to send from
+SENDER_PASSWORD=app_password            # Email password or app password
+RECIPIENT_EMAIL=your@email.com          # Where to receive job emails
 ```
 
 ### User Data Files
 - `user_data/base_resume.json` - Your resume (JSON Resume format)
 - `user_data/preferences.json` - Search filters, blacklists, preferences
+- `user_data/monitor_state.json` - Auto-generated state for job monitoring (tracks processed jobs)
 
 ## Testing and Debugging
 
 ### Running the Bot
 ```bash
+# CLI Mode
 poetry run python -m jobby_bot.agent
+
+# Discord Mode (with optional auto-monitoring)
+poetry run python -m jobby_bot.discord_bot
+
+# Standalone Auto Monitor (runs independently)
+poetry run python -m jobby_bot.auto_job_monitor
+
+# Test Discord Setup
+poetry run python test_discord.py
 ```
 
 ### Debug Session Logs
@@ -198,12 +234,12 @@ poetry run python -m jobby_bot.agent
 - `python-jobspy` - Scrapes LinkedIn, Indeed, Google jobs
 
 ### Integration
+- `discord.py ^2.3.0` - Discord bot interface
 - `notion-client ^2.2.1` - Notion database integration
 
 ### Document Generation
-- `weasyprint ^60.0` - PDF generation (future feature)
-- `pdfplumber ^0.11.0` - PDF text extraction
-- `reportlab ^4.0.0` - PDF creation
+- `reportlab ^4.0.0` - ATS-friendly PDF creation for resumes/cover letters
+- `pdfplumber ^0.11.0` - PDF text extraction for resume conversion
 
 ### Utilities
 - `pydantic ^2.0.0` - Data validation
@@ -243,19 +279,14 @@ poetry run python -m jobby_bot.agent
 ## Future Enhancements
 
 Potential areas for expansion:
-- PDF resume generation (currently markdown/text)
 - Additional job sites (ZipRecruiter, Glassdoor)
-- Email integration for submissions
 - Interview prep agent
 - Application status monitoring
 - Automated follow-up scheduling
 
 ## Resources
 
-- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
-- [JSON Resume Format](https://jsonresume.org/)
-- [JobSpy Documentation](https://github.com/Bunsly/JobSpy)
-- [Notion API](https://developers.notion.com/)
+- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk), [Discord.py](https://discordpy.readthedocs.io/), [Notion API](https://developers.notion.com/)
 
 ## Maintenance Notes
 
@@ -263,3 +294,4 @@ Potential areas for expansion:
 - Update this documentation when adding new agents/features
 - Monitor costs via API usage dashboard
 - Review session logs periodically for improvement opportunities
+- when update claude.md do it very condensely and concise, with max 2 lines for doc references and features.
