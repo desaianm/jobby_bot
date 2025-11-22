@@ -1,0 +1,28 @@
+# Jobby Bot - Requirements
+# Generated from pyproject.toml
+# For development dependencies, see requirements-dev.txt
+
+# Core dependencies
+claude-agent-sdk>=0.1.0
+anthropic>=0.39.0
+discord.py>=2.0.0
+# Job search
+python-jobspy
+
+# Notion integration
+notion-client>=2.2.1
+
+# Data handling
+pydantic>=2.0.0
+pandas>=2.0.0
+
+# Configuration
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Document generation
+weasyprint>=60.0
+markdown>=3.5
+jinja2>=3.1.0
+reportlab>=4.0.0
+pdfplumber>=0.11.0
