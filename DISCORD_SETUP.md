@@ -212,7 +212,7 @@ Ensure the bot has these permissions in your Discord server:
 
 Each Discord user gets their own isolated session:
 - Sessions persist across messages
-- Use `!jobby end` to clean up and view session logs
+- Use `/end` to clean up and view session logs
 - Logs are saved in `logs/session_TIMESTAMP/`
 
 ## Cost Considerations
@@ -220,7 +220,7 @@ Each Discord user gets their own isolated session:
 - Uses Sonnet 4.5 for orchestration (lead agent)
 - Uses Haiku 4.5 for task execution (subagents)
 - Each user session maintains its own Claude client
-- Sessions are cleaned up with `!jobby end` command
+- Sessions are cleaned up with `/end` command
 
 ## Security Notes
 

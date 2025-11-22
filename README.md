@@ -204,14 +204,14 @@ poetry run python -m jobby_bot.discord_bot
 3. Interact via DMs or by mentioning the bot in channels
 4. Each Discord user gets their own isolated session
 
-**Discord Commands:**
-- `!jobby upload-resume` - Upload resume (PDF/TXT)
-- `!jobby set-preferences` - Update job search settings
-- `!jobby show-resume` - View resume summary
-- `!jobby show-preferences` - View settings
-- `!jobby start` - Show welcome message
-- `!jobby help` - Get detailed help
-- `!jobby end` - End your current session
+**Discord Slash Commands:**
+- `/upload-resume` - Upload resume (PDF/TXT)
+- `/set-preferences` - Update job search settings
+- `/show-resume` - View resume summary
+- `/show-preferences` - View settings
+- `/start` - Show welcome message
+- `/help` - Get detailed help
+- `/end` - End your current session
 
 **Auto Job Monitoring:**
 Enable automatic job checking every 30 minutes by setting:
