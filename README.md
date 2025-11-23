@@ -251,13 +251,19 @@ Search for data analyst jobs in New York, don't generate materials yet
 Find 15 remote backend engineer jobs posted in the last 48 hours
 ```
 
-### What happens
+### What happens (Interactive Workflow)
 
-1. **Job Search**: The job-finder agent scrapes jobs from multiple sites and filters based on your preferences
-2. **Resume Generation**: For each job, the resume-writer creates an ATS-optimized resume
-3. **Cover Letters**: The cover-letter agent generates personalized letters
-4. **Notion Tracking**: All jobs are added to your Notion database with links to materials
-5. **Output Files**: Everything is saved to `output/` folders
+1. **Job Search**: The job-finder agent scrapes jobs and presents them to you
+2. **Your Selection**: You choose which jobs to apply to (numbers, ranges, or "all")
+3. **Answer Questions**: Ask about any job for details before deciding
+4. **Confirm Applications**: Bot confirms the count before generating materials
+5. **Resume & Cover Letter Generation**: Creates ATS-optimized resumes and personalized letters for selected jobs
+6. **Email (Optional)**: Bot asks if you want to send individual emails with attachments
+7. **Notion Tracking (Optional)**: Bot asks if you want to track applications in Notion
+8. **Summary Email (Optional)**: Bot asks if you want a summary email with all applications
+9. **Output Files**: Everything is saved to `output/` folders
+
+**You're in control:** The bot asks for confirmation at each major step, so you decide what happens!
 
 ### Output structure
 

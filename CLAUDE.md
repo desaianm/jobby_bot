@@ -24,13 +24,16 @@
 - **Tool restrictions**: Lead agent ONLY uses `Task` tool
 - **Model selection**: Use Haiku for cost-effective subagents
 - **No cross-contamination**: Agents don't perform other agents' tasks
+- **Temporary scripts**: ALL agents use tmp/ folder for scripts, clean up before returning
+- **No summary files**: Agents NEVER create summary.md files, only final task output
 
 ### 3. File Organization
 ```
 jobby_bot/
 ├── agent.py              # CLI orchestrator entry point
-├── discord_bot.py        # Discord bot interface with auto-monitoring
-├── auto_job_monitor.py   # Automated job checking and matching
+├── discord_bot.py        # Discord bot with slash commands + tasks.loop auto-monitor
+├── discord_commands.py   # Slash command definitions (upload-resume, set-preferences, etc.)
+├── auto_job_monitor.py   # Standalone monitor (deprecated, use Discord tasks.loop)
 ├── prompts/              # Agent system prompts (txt files)
 │   ├── lead_agent.txt
 │   ├── job_finder.txt
@@ -42,14 +45,16 @@ jobby_bot/
 ├── tools/                # Custom tools for agents
 │   ├── jobspy_tool.py
 │   └── notion_tool.py
-└── utils/                # Shared utilities
-    ├── subagent_tracker.py
-    ├── transcript.py
-    ├── message_handler.py
-    ├── email_sender.py
-    ├── pdf_generator.py         # Main PDF interface
-    ├── chrome_pdf_generator.py  # Chrome CDP rendering (AIHawk method)
-    └── html_content_generator.py # HTML generation with smart formatting
+├── utils/                # Shared utilities
+│   ├── subagent_tracker.py
+│   ├── transcript.py
+│   ├── message_handler.py
+│   ├── email_sender.py
+│   ├── pdf_generator.py         # Main PDF interface
+│   ├── chrome_pdf_generator.py  # Chrome CDP rendering (AIHawk method)
+│   └── html_content_generator.py # HTML generation with smart formatting
+└── tmp/                  # Temporary scripts (auto-cleaned by agents)
+    └── .gitkeep
 ```
 
 ### 4. Output Structure
@@ -71,7 +76,17 @@ logs/
 - **Model**: claude-sonnet-4-5
 - **Tools**: `Task` ONLY (spawns subagents)
 - **Role**: Workflow coordination, no direct execution
+- **Interactive**: ALWAYS asks user to confirm job selections, emails, Notion tracking
 - **Prompt**: `prompts/lead_agent.txt`
+
+**Interactive Workflow:**
+1. Search for jobs → Present list to user
+2. Ask which jobs to apply to (numbers, ranges, or "all")
+3. Answer any user questions about specific jobs
+4. Confirm number of applications before generating materials
+5. Ask before sending emails (if configured)
+6. Ask before tracking in Notion (if configured)
+7. Ask before sending summary email (if configured)
 
 ### Job Finder Agent
 - **Model**: claude-haiku-4-5
@@ -219,10 +234,10 @@ RECIPIENT_EMAIL=your@email.com          # Where to receive job emails
 # CLI Mode
 poetry run python -m jobby_bot.agent
 
-# Discord Mode (with optional auto-monitoring)
+# Discord Mode (with optional auto-monitoring using tasks.loop)
 poetry run python -m jobby_bot.discord_bot
 
-# Standalone Auto Monitor (runs independently)
+# Standalone Auto Monitor (deprecated - use Discord auto-monitor instead)
 poetry run python -m jobby_bot.auto_job_monitor
 
 # Test Discord Setup

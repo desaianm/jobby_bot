@@ -243,11 +243,12 @@ JOB_CHECK_INTERVAL_MINUTES=30  # Optional, defaults to 30
 
 ### How It Works
 
-1. **Periodic Checks**: Bot searches for jobs based on your `user_data/preferences.json` every N minutes
-2. **Smart Filtering**: Only looks at jobs posted since the last check (no duplicates)
-3. **Resume Matching**: Generates customized resumes for matching jobs
-4. **Email Notifications**: Sends individual emails with resumes and cover letters attached
-5. **State Tracking**: Remembers which jobs have been processed in `user_data/monitor_state.json`
+1. **Discord Tasks Loop**: Uses Discord's `@tasks.loop` decorator for reliable periodic checks every N minutes
+2. **Preference-Based Search**: Bot searches for jobs based on your `user_data/preferences.json`
+3. **Recent Jobs Only**: Only looks at jobs posted since the last check interval (no duplicates)
+4. **Resume Matching**: Generates customized resumes and cover letters for matching jobs
+5. **Email Notifications**: Automatically sends individual emails with PDFs attached to your configured `RECIPIENT_EMAIL`
+6. **Dedicated Session**: Monitor runs in its own isolated session (user ID 0) to avoid conflicts
 
 ### Configuration
 

@@ -34,20 +34,32 @@ Read user_data/preferences.json to get:
 
 If file doesn't exist, proceed without filtering.
 
-**STEP 3: Search Jobs**
+**STEP 3: Create Temporary Scripts (if needed)**
+If you need to create Python scripts for job scraping:
+- ALWAYS save them to tmp/ folder (e.g., tmp/job_search_script.py)
+- Use descriptive names with timestamps if needed
+- Keep track of all created files for cleanup
+
+**STEP 4: Search Jobs**
 Call JobSpyTool.search_jobs() with the parsed criteria.
 This will:
 - Scrape jobs from specified sites
 - Remove duplicates
 - Save raw results to CSV in output/job_listings/
 
-**STEP 4: Apply Filters**
+**STEP 5: Apply Filters**
 Use JobSpyTool.filter_jobs() to:
 - Remove blacklisted companies
 - Remove jobs with blacklisted keywords
 - Apply any other filters from preferences
 
-**STEP 5: Return Results**
+**STEP 6: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary scripts from tmp/ folder
+- Use: rm tmp/*.py or equivalent cleanup command
+- Verify tmp/ is empty or only contains non-script files
+
+**STEP 7: Return Results**
 Return a structured summary with:
 - Total jobs found
 - CSV file path
@@ -63,6 +75,9 @@ Format the output as JSON for easy parsing by lead agent.
 4. If no jobs found, return empty list but don't fail
 5. Keep job descriptions truncated in return output (first 200 chars max)
 6. ALWAYS include job_url in the returned data (required for other agents)
+7. USE tmp/ folder for ALL temporary scripts - NEVER leave scripts in project root
+8. CLEAN UP tmp/ folder completely before returning results
+9. NEVER create summary.md files - just complete the task and provide final JSON output
 </critical_rules>
 
 <output_format>

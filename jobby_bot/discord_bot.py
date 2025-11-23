@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import Dict, Optional
 import tempfile
 import json
+from datetime import datetime
 from dotenv import load_dotenv
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
 from jobby_bot.utils.subagent_tracker import SubagentTracker
 from jobby_bot.utils.transcript import setup_session, TranscriptWriter
 from jobby_bot.utils.message_handler import process_assistant_message
-from jobby_bot.auto_job_monitor import AutoJobMonitor
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +57,7 @@ class JobbySession:
         job_finder_prompt = load_prompt("job_finder.txt")
         resume_writer_prompt = load_prompt("resume_writer.txt")
         cover_letter_prompt = load_prompt("cover_letter.txt")
+        email_agent_prompt = load_prompt("email_agent.txt")
         notion_agent_prompt = load_prompt("notion_agent.txt")
         config_agent_prompt = load_prompt("config_agent.txt")
 
@@ -100,6 +101,17 @@ class JobbySession:
                 ),
                 tools=["Read", "Write"],
                 prompt=cover_letter_prompt,
+                model="haiku"
+            ),
+            "email-agent": AgentDefinition(
+                description=(
+                    "Use this agent when you need to send job application emails. "
+                    "The email-agent sends individual emails per job with resume and cover letter attachments, "
+                    "or sends a daily summary email with all applications. "
+                    "Does NOT search for jobs or create materials - only sends emails."
+                ),
+                tools=["Bash", "Read"],
+                prompt=email_agent_prompt,
                 model="haiku"
             ),
             "notion-agent": AgentDefinition(
@@ -216,8 +228,8 @@ class JobbyBot(commands.Bot):
 
         self.sessions: Dict[int, JobbySession] = {}
         self.enable_auto_monitor = enable_auto_monitor
-        self.auto_monitor: Optional[AutoJobMonitor] = None
-        self.monitor_task: Optional[asyncio.Task] = None
+        self.check_interval_minutes = int(os.getenv("JOB_CHECK_INTERVAL_MINUTES", "30"))
+        self.monitor_session: Optional[JobbySession] = None
 
     async def setup_hook(self):
         """Called when the bot is ready."""
@@ -228,10 +240,12 @@ class JobbyBot(commands.Bot):
 
         # Start auto job monitoring if enabled
         if self.enable_auto_monitor:
-            check_interval = int(os.getenv("JOB_CHECK_INTERVAL_MINUTES", "30"))
-            print(f"🔄 Starting auto job monitor (interval: {check_interval} minutes)...")
-            self.auto_monitor = AutoJobMonitor(check_interval_minutes=check_interval)
-            self.monitor_task = asyncio.create_task(self.auto_monitor.run_monitoring_loop())
+            print(f"🔄 Starting auto job monitor (interval: {self.check_interval_minutes} minutes)...")
+            # Initialize a dedicated session for the monitor
+            self.monitor_session = JobbySession(user_id=0)  # Use ID 0 for system monitor
+            await self.monitor_session.initialize()
+            # Start the loop
+            self.auto_job_check.start()
             print("✅ Auto job monitor started")
 
     async def get_or_create_session(self, user_id: int) -> JobbySession:
@@ -241,6 +255,59 @@ class JobbyBot(commands.Bot):
             await session.initialize()
             self.sessions[user_id] = session
         return self.sessions[user_id]
+
+    @tasks.loop(minutes=30)
+    async def auto_job_check(self):
+        """Automatically check for new jobs every N minutes."""
+        try:
+            print(f"\n🔍 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running auto job check...")
+
+            # Load user preferences
+            preferences_file = USER_DATA_DIR / "preferences.json"
+            if not preferences_file.exists():
+                print("⚠️ No preferences.json found. Skipping check.")
+                return
+
+            with open(preferences_file, 'r') as f:
+                preferences = json.load(f)
+
+            # Get search parameters
+            default_search = preferences.get('default_search', {})
+            search_term = default_search.get('search_term', 'software engineer')
+            location = default_search.get('location', '')
+            is_remote = default_search.get('is_remote', False)
+            results_wanted = default_search.get('results_wanted', 10)
+
+            # Build query for recent jobs
+            hours_old = max(1, self.check_interval_minutes // 30 + 1)
+            query = f"Search for {results_wanted} {search_term} jobs posted in the last {hours_old} hours"
+
+            if location:
+                query += f" in {location}"
+            if is_remote:
+                query += " (remote positions only)"
+
+            # Add email instruction
+            query += ". Generate resumes and cover letters for matches, then send individual emails for each job to the configured recipient."
+
+            print(f"📋 Query: {query}")
+
+            # Execute through the monitor session
+            if self.monitor_session:
+                response = await self.monitor_session.process_message(query)
+                print(f"✅ Auto job check completed")
+                print(f"Response summary: {response[:200]}...")
+
+        except Exception as e:
+            print(f"❌ Error in auto job check: {e}")
+
+    @auto_job_check.before_loop
+    async def before_auto_job_check(self):
+        """Wait until the bot is ready before starting the loop."""
+        await self.wait_until_ready()
+        # Update loop interval dynamically
+        self.auto_job_check.change_interval(minutes=self.check_interval_minutes)
+        print(f"⏱️  Auto job check interval set to {self.check_interval_minutes} minutes")
 
     async def on_message(self, message: discord.Message):
         """Handle incoming messages."""

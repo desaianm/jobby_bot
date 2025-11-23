@@ -31,7 +31,12 @@ Check that:
 
 If any validation fails, return clear error message.
 
-**STEP 3: Create Notion Entries**
+**STEP 3: Create Temporary Script (if needed)**
+If you need a Python script to interact with Notion API:
+- Save it to tmp/notion_sync.py
+- Make it executable for one-time use
+
+**STEP 4: Create Notion Entries**
 For each job:
 1. Prepare entry data:
    - Job Title (title field)
@@ -51,7 +56,13 @@ For each job:
 
 4. Continue even if individual entries fail (log errors)
 
-**STEP 4: Return Summary**
+**STEP 5: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary scripts from tmp/ folder
+- Use: rm tmp/*.py
+- Verify tmp/ is clean
+
+**STEP 6: Return Summary**
 Report:
 - Total entries created successfully
 - Any failures with reasons
@@ -66,6 +77,9 @@ Report:
 5. Truncate long descriptions to fit Notion limits (2000 chars)
 6. Include all file paths for easy reference
 7. Log errors clearly but don't expose sensitive API details
+8. USE tmp/ folder for ALL temporary Notion scripts
+9. CLEAN UP tmp/ folder completely before returning results
+10. NEVER create summary.md files - just complete the task and provide final confirmation message
 </critical_rules>
 
 <output_format>

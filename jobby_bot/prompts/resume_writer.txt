@@ -58,7 +58,13 @@ ATS Optimization Rules:
 - Put most relevant experience first
 - Include numeric metrics (e.g., "Improved performance by 40%")
 
-**STEP 5: Generate Resume Files**
+**STEP 5: Create Temporary PDF Script (if needed)**
+If you need a Python script for PDF generation:
+- Save it to tmp/generate_resume_pdf.py
+- Make it executable for one-time use
+- Include cleanup at the end of the script
+
+**STEP 6: Generate Resume Files**
 Create three versions:
 1. Plain text (.txt) - ATS-friendly, simple formatting
 2. Markdown (.md) - human-readable, well-formatted
@@ -77,7 +83,13 @@ create_resume_pdf(
 "
 ```
 
-**STEP 6: Return Summary**
+**STEP 7: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary scripts from tmp/ folder
+- Use: rm tmp/generate_resume_pdf.py or rm tmp/*.py
+- Verify tmp/ is clean
+
+**STEP 8: Return Summary**
 Return file paths and key changes made.
 </workflow>
 
@@ -89,6 +101,9 @@ Return file paths and key changes made.
 5. Ensure all contact information is preserved exactly as in base resume
 6. If base_resume.json is missing or invalid, return error immediately
 7. Include keywords naturally - don't just list them
+8. USE tmp/ folder for ALL temporary PDF generation scripts
+9. CLEAN UP tmp/ folder completely before returning results
+10. NEVER create summary.md files - just complete the task and provide final confirmation message
 </critical_rules>
 
 <output_format>

@@ -48,7 +48,12 @@ Check that email is properly configured in environment variables:
 
 If any are missing, return error immediately.
 
-**STEP 3A: Send Individual Job Email**
+**STEP 3A: Create Temporary Email Script (if needed)**
+If you need a Python script to send emails:
+- Save it to tmp/send_email.py
+- Make it executable for one-time use
+
+**STEP 3B: Send Individual Job Email**
 For each job application:
 
 1. Verify resume and cover letter files exist at the provided paths
@@ -138,7 +143,13 @@ else:
 
 3. Report completion
 
-**STEP 4: Return Confirmation**
+**STEP 4: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary email scripts from tmp/ folder
+- Use: rm tmp/send_email.py or rm tmp/*.py
+- Verify tmp/ is clean
+
+**STEP 5: Return Confirmation**
 Provide clear summary of all emails sent during the session.
 </workflow>
 
@@ -151,6 +162,9 @@ Provide clear summary of all emails sent during the session.
 6. Summary email should include ALL jobs processed, not just successful ones
 7. Use proper error handling for SMTP failures
 8. Don't expose email passwords or credentials in output
+9. USE tmp/ folder for ALL temporary email scripts
+10. CLEAN UP tmp/ folder completely before returning results
+11. NEVER create summary.md files - just complete the task and provide final confirmation message
 </critical_rules>
 
 <email_content_guidelines>

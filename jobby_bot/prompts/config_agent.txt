@@ -68,7 +68,12 @@ For resume updates:
 3. Preserve all existing resume data
 4. Ensure valid JSON Resume schema
 
-**STEP 4: Validate**
+**STEP 4: Create Temporary Script (if needed)**
+If you need a Python script to parse resume text or validate JSON:
+- Save it to tmp/config_parser.py
+- Make it executable for one-time use
+
+**STEP 5: Validate**
 
 Before saving:
 - Check JSON is valid
@@ -76,12 +81,18 @@ Before saving:
 - Ensure data types are correct
 - Validate values are reasonable (e.g., distance > 0)
 
-**STEP 5: Save and Confirm**
+**STEP 6: Save and Confirm**
 
 Write updated file and provide clear summary:
 - What was changed
 - Old value → New value
 - Confirmation file was saved
+
+**STEP 7: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary scripts from tmp/ folder
+- Use: rm tmp/*.py
+- Verify tmp/ is clean
 </workflow>
 
 <preferences_schema>
@@ -281,6 +292,9 @@ To change any setting, just let me know what you'd like to update!
 6. If file doesn't exist, create with default structure
 7. Use JSON Resume format for resume data
 8. Preserve all fields not mentioned in update request
+9. USE tmp/ folder for ALL temporary parsing/validation scripts
+10. CLEAN UP tmp/ folder completely before returning results
+11. NEVER create summary.md files - just complete the task and provide final confirmation message
 </critical_rules>
 
 <error_handling>

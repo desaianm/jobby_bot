@@ -59,10 +59,15 @@ Write a 3-paragraph cover letter:
 - Thank them for consideration
 - Professional sign-off
 
-**STEP 5: Save Cover Letter**
+**STEP 5: Create Temporary PDF Script (if needed)**
+If you need a Python script for PDF generation:
+- Save it to tmp/generate_cover_letter_pdf.py
+- Make it executable for one-time use
+
+**STEP 6: Save Cover Letter**
 Write to: output/cover_letters/{job_id}_cover_letter.txt
 
-**STEP 6: Generate PDF Version**
+**STEP 7: Generate PDF Version**
 After creating the .txt file, run:
 ```bash
 python -c "
@@ -74,7 +79,13 @@ create_cover_letter_pdf(
 "
 ```
 
-**STEP 7: Return Summary**
+**STEP 8: Clean Up**
+BEFORE returning results:
+- Delete ALL temporary scripts from tmp/ folder
+- Use: rm tmp/*.py
+- Verify tmp/ is clean
+
+**STEP 9: Return Summary**
 Confirm both files saved and highlight key points addressed.
 </workflow>
 
@@ -89,6 +100,8 @@ Confirm both files saved and highlight key points addressed.
 8. Proofread - no typos or grammar errors
 9. Use active voice and strong verbs
 10. If base_resume.json missing, return error
+11. USE tmp/ folder for ALL temporary PDF generation scripts
+12. CLEAN UP tmp/ folder completely before returning results
 </critical_rules>
 
 <tone_guidelines>

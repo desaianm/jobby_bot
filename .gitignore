@@ -78,6 +78,7 @@ dmypy.json
 *.tmp
 *.bak
 *.swp
+tmp/
 
 __pycache__/
 logs/
