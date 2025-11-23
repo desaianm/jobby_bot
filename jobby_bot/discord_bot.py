@@ -22,7 +22,7 @@ load_dotenv()
 
 # Paths
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
+USER_DATA_DIR = Path(__file__).parent / "user_data"
 
 
 def load_prompt(filename: str) -> str:

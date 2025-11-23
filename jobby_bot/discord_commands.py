@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 
 # Paths
-USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
+USER_DATA_DIR = Path(__file__).parent / "user_data"
 
 
 @app_commands.command(name="help", description="Show detailed help information")
