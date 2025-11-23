@@ -3,6 +3,7 @@
 *.env
 !.env.example
 
+user_data/
 # Python
 __pycache__/
 *.py[cod]
