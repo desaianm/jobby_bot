@@ -17,7 +17,7 @@ load_dotenv()
 
 # Paths
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
+USER_DATA_DIR = Path(__file__).parent / "user_data"
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 MONITOR_STATE_FILE = USER_DATA_DIR / "monitor_state.json"
 
