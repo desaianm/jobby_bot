@@ -138,25 +138,40 @@ class JobbySession:
     def _load_user_context(self) -> str:
         """Load user preferences and resume info to inject into messages."""
         context_parts = []
+        debug_mode = os.getenv("AGNO_DEBUG", "false").lower() == "true"
 
         # Load preferences
         prefs_file = USER_DATA_DIR / "preferences.json"
+        if debug_mode:
+            print(f"DEBUG: Looking for preferences at: {prefs_file}")
+            print(f"DEBUG: File exists: {prefs_file.exists()}")
+
         if prefs_file.exists():
             try:
                 with open(prefs_file, 'r') as f:
                     prefs = json.load(f)
+                if debug_mode:
+                    print(f"DEBUG: Loaded prefs keys: {list(prefs.keys())}")
                 default_search = prefs.get('default_search', {})
+                if debug_mode:
+                    print(f"DEBUG: default_search: {default_search}")
                 context_parts.append(f"""<user_preferences>
 Search Term: {default_search.get('search_term', 'not set')}
 Location: {default_search.get('location', 'not set')}
 Remote: {default_search.get('is_remote', False)}
 Results Wanted: {default_search.get('results_wanted', 20)}
 </user_preferences>""")
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"ERROR loading preferences: {e}")
+        else:
+            print(f"WARNING: preferences.json not found at {prefs_file}")
 
         # Load resume info
         resume_file = USER_DATA_DIR / "base_resume.json"
+        if debug_mode:
+            print(f"DEBUG: Looking for resume at: {resume_file}")
+            print(f"DEBUG: File exists: {resume_file.exists()}")
+
         if resume_file.exists():
             try:
                 with open(resume_file, 'r') as f:
@@ -167,8 +182,10 @@ Name: {basics.get('name', 'not set')}
 Email: {basics.get('email', 'not set')}
 Resume file: user_data/base_resume.json (EXISTS)
 </user_resume>""")
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"ERROR loading resume: {e}")
+        else:
+            print(f"WARNING: base_resume.json not found at {resume_file}")
 
         return "\n".join(context_parts)
 
@@ -468,6 +485,9 @@ async def main():
     print("\n" + "="*60)
     print("🤖 JOBBY BOT - Discord Integration (Agno Framework)")
     print("="*60)
+    print(f"📁 User data directory: {USER_DATA_DIR}")
+    print(f"   preferences.json exists: {(USER_DATA_DIR / 'preferences.json').exists()}")
+    print(f"   base_resume.json exists: {(USER_DATA_DIR / 'base_resume.json').exists()}")
     print("✅ Using Agno multi-agent framework")
     print("✅ PDF generation with WeasyPrint (no Chrome needed)")
     if enable_monitor:
