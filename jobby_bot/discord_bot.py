@@ -55,6 +55,10 @@ class JobbySession:
         notion_agent_prompt = load_prompt("notion_agent.txt")
         lead_agent_prompt = load_prompt("lead_agent.txt")
 
+        # Check if debug mode is enabled via environment variable
+        debug_mode = os.getenv("AGNO_DEBUG", "false").lower() == "true"
+        debug_level = int(os.getenv("AGNO_DEBUG_LEVEL", "1"))
+
         # Create specialized agents
         job_finder = Agent(
             name="Job Finder",
@@ -63,6 +67,8 @@ class JobbySession:
             tools=[search_jobs, validate_job_url, read_file, write_file],
             instructions=job_finder_prompt,
             markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
         resume_writer = Agent(
@@ -72,6 +78,8 @@ class JobbySession:
             tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
             instructions=resume_writer_prompt,
             markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
         cover_letter_writer = Agent(
@@ -81,6 +89,8 @@ class JobbySession:
             tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
             instructions=cover_letter_prompt,
             markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
         notion_agent = Agent(
@@ -90,6 +100,8 @@ class JobbySession:
             tools=[create_notion_entry, read_file],
             instructions=notion_agent_prompt,
             markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
         email_agent = Agent(
@@ -99,6 +111,8 @@ class JobbySession:
             tools=[send_email, read_file],
             instructions="Send professional job application emails with resume and cover letter attachments.",
             markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
         # Create team with lead agent
@@ -114,9 +128,11 @@ class JobbySession:
             ],
             instructions=lead_agent_prompt,
             markdown=True,
-            show_members_responses=False,
+            show_members_responses=True,  # Show member responses for debugging
             get_member_information_tool=True,
             add_member_tools_to_context=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
         )
 
     def _load_user_context(self) -> str:
