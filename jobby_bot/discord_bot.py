@@ -32,8 +32,8 @@ from jobby_bot.agent import (
 # Load environment variables
 load_dotenv()
 
-# Paths
-USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
+# Paths - user_data is inside the jobby_bot module
+USER_DATA_DIR = Path(__file__).parent / "user_data"
 
 
 class JobbySession:
@@ -43,6 +43,8 @@ class JobbySession:
         self.user_id = user_id
         self.team: Optional[Team] = None
         self.is_processing = False
+        self.conversation_history: list = []  # Track recent conversation for context
+        self.last_created_files: dict = {}  # Track files created in this session
 
     async def initialize(self):
         """Initialize the Agno team."""
@@ -117,6 +119,69 @@ class JobbySession:
             add_member_tools_to_context=True,
         )
 
+    def _load_user_context(self) -> str:
+        """Load user preferences and resume info to inject into messages."""
+        context_parts = []
+
+        # Load preferences
+        prefs_file = USER_DATA_DIR / "preferences.json"
+        if prefs_file.exists():
+            try:
+                with open(prefs_file, 'r') as f:
+                    prefs = json.load(f)
+                default_search = prefs.get('default_search', {})
+                context_parts.append(f"""<user_preferences>
+Search Term: {default_search.get('search_term', 'not set')}
+Location: {default_search.get('location', 'not set')}
+Remote: {default_search.get('is_remote', False)}
+Results Wanted: {default_search.get('results_wanted', 20)}
+</user_preferences>""")
+            except Exception:
+                pass
+
+        # Load resume info
+        resume_file = USER_DATA_DIR / "base_resume.json"
+        if resume_file.exists():
+            try:
+                with open(resume_file, 'r') as f:
+                    resume = json.load(f)
+                basics = resume.get('basics', {})
+                context_parts.append(f"""<user_resume>
+Name: {basics.get('name', 'not set')}
+Email: {basics.get('email', 'not set')}
+Resume file: user_data/base_resume.json (EXISTS)
+</user_resume>""")
+            except Exception:
+                pass
+
+        return "\n".join(context_parts)
+
+    def _build_conversation_context(self) -> str:
+        """Build conversation history context for the agent."""
+        if not self.conversation_history:
+            return ""
+
+        # Keep last 5 exchanges for context
+        recent = self.conversation_history[-10:]  # 5 user + 5 assistant messages
+        context_lines = ["<conversation_history>"]
+        for entry in recent:
+            role = entry.get('role', 'user')
+            content = entry.get('content', '')[:500]  # Truncate long messages
+            context_lines.append(f"{role}: {content}")
+        context_lines.append("</conversation_history>")
+        return "\n".join(context_lines)
+
+    def _build_files_context(self) -> str:
+        """Build context about recently created files."""
+        if not self.last_created_files:
+            return ""
+
+        lines = ["<recently_created_files>"]
+        for file_type, path in self.last_created_files.items():
+            lines.append(f"{file_type}: {path}")
+        lines.append("</recently_created_files>")
+        return "\n".join(lines)
+
     async def process_message(self, message: str) -> str:
         """Process a user message and return the agent's response."""
         if self.is_processing:
@@ -125,25 +190,68 @@ class JobbySession:
         self.is_processing = True
 
         try:
+            # Build full context
+            user_context = self._load_user_context()
+            conversation_context = self._build_conversation_context()
+            files_context = self._build_files_context()
+
+            # Combine all context
+            context_parts = [p for p in [user_context, conversation_context, files_context] if p]
+            full_context = "\n\n".join(context_parts)
+
+            if full_context:
+                enhanced_message = f"{full_context}\n\n<user_message>{message}</user_message>"
+            else:
+                enhanced_message = message
+
+            # Add user message to history
+            self.conversation_history.append({"role": "user", "content": message})
+
             # Run the team synchronously in a thread pool
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: self.team.run(message)
+                lambda: self.team.run(enhanced_message)
             )
 
             # Extract text from response
             if hasattr(response, 'content'):
-                return response.content
+                response_text = response.content
             elif isinstance(response, str):
-                return response
+                response_text = response
             else:
-                return str(response)
+                response_text = str(response)
+
+            # Add assistant response to history
+            self.conversation_history.append({"role": "assistant", "content": response_text})
+
+            # Track created files from response
+            self._track_created_files(response_text)
+
+            return response_text
 
         except Exception as e:
             return f"❌ Error: {str(e)}"
         finally:
             self.is_processing = False
+
+    def _track_created_files(self, response: str):
+        """Extract and track file paths mentioned in response."""
+        import re
+        # Look for resume paths
+        resume_match = re.search(r'output/resumes/([^\s]+\.pdf)', response)
+        if resume_match:
+            self.last_created_files['resume'] = f"output/resumes/{resume_match.group(1)}"
+
+        # Look for cover letter paths
+        cover_match = re.search(r'output/cover_letters/([^\s]+\.pdf)', response)
+        if cover_match:
+            self.last_created_files['cover_letter'] = f"output/cover_letters/{cover_match.group(1)}"
+
+        # Look for job listings
+        jobs_match = re.search(r'output/job_listings/([^\s]+\.csv)', response)
+        if jobs_match:
+            self.last_created_files['job_listings'] = f"output/job_listings/{jobs_match.group(1)}"
 
     async def cleanup(self):
         """Clean up session resources."""

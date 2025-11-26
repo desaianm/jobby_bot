@@ -397,7 +397,8 @@ def validate_job_url(job_url: str) -> str:
 def send_email(
     subject: str,
     body: str,
-    attachments: list = None
+    attachments: list = None,
+    recipient_email: str = None
 ) -> str:
     """Send an email with optional attachments.
 
@@ -405,23 +406,36 @@ def send_email(
         subject: Email subject line
         body: Email body content (HTML supported)
         attachments: List of file paths to attach
+        recipient_email: Email address to send to (optional, uses RECIPIENT_EMAIL from env if not provided)
 
     Returns:
         Success or error message
     """
     try:
-        from jobby_bot.utils.email_sender import send_email as send_email_util
+        from jobby_bot.utils.email_sender import create_email_sender_from_env
 
-        smtp_server = os.environ.get("SMTP_SERVER")
-        if not smtp_server:
-            return "Error: Email not configured (SMTP_SERVER missing)"
+        sender = create_email_sender_from_env()
+        if not sender:
+            return "Error: Email not configured. Please set SMTP_SERVER, SMTP_PORT, SENDER_EMAIL, SENDER_PASSWORD in .env"
 
-        result = send_email_util(
+        # Use provided recipient or fall back to env
+        recipient = recipient_email or os.environ.get("RECIPIENT_EMAIL")
+        if not recipient:
+            return "Error: No recipient email provided and RECIPIENT_EMAIL not set in .env"
+
+        # Send email
+        success = sender._send_email(
+            recipient_email=recipient,
             subject=subject,
-            body=body,
+            body_html=body,
             attachments=attachments or []
         )
-        return result
+
+        if success:
+            attachment_names = [os.path.basename(a) for a in (attachments or []) if a]
+            return f"✅ Email sent successfully to {recipient}\nSubject: {subject}\nAttachments: {', '.join(attachment_names) if attachment_names else 'None'}"
+        else:
+            return "❌ Failed to send email. Check SMTP configuration."
     except Exception as e:
         return f"Error sending email: {str(e)}"
 
