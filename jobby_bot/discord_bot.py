@@ -1,10 +1,9 @@
-"""Discord bot interface for Jobby Bot multi-agent system."""
+"""Discord bot interface for Jobby Bot multi-agent system using Agno."""
 
 import asyncio
 import os
 from pathlib import Path
 from typing import Dict, Optional
-import tempfile
 import json
 from datetime import datetime
 from dotenv import load_dotenv
@@ -12,161 +11,111 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AgentDefinition, HookMatcher
-from jobby_bot.utils.subagent_tracker import SubagentTracker
-from jobby_bot.utils.transcript import setup_session, TranscriptWriter
-from jobby_bot.utils.message_handler import process_assistant_message
+from agno.agent import Agent
+from agno.models.anthropic import Claude
+from agno.team import Team
+
+from jobby_bot.agent import (
+    search_jobs,
+    read_file,
+    write_file,
+    generate_pdf,
+    screenshot_pdf,
+    generate_html_from_text,
+    generate_pdf_from_html,
+    create_notion_entry,
+    send_email,
+    validate_job_url,
+    load_prompt,
+)
 
 # Load environment variables
 load_dotenv()
 
 # Paths
-PROMPTS_DIR = Path(__file__).parent / "prompts"
-USER_DATA_DIR = Path(__file__).parent / "user_data"
-
-
-def load_prompt(filename: str) -> str:
-    """Load a prompt from the prompts directory."""
-    prompt_path = PROMPTS_DIR / filename
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+USER_DATA_DIR = Path(__file__).parent.parent / "user_data"
 
 
 class JobbySession:
-    """Manages a single user's Jobby Bot session."""
+    """Manages a single user's Jobby Bot session using Agno."""
 
     def __init__(self, user_id: int):
         self.user_id = user_id
-        self.client: Optional[ClaudeSDKClient] = None
-        self.transcript: Optional[TranscriptWriter] = None
-        self.tracker: Optional[SubagentTracker] = None
-        self.session_dir: Optional[Path] = None
+        self.team: Optional[Team] = None
         self.is_processing = False
 
     async def initialize(self):
-        """Initialize the Claude agent and session tracking."""
-        # Setup session directory and transcript
-        transcript_file, session_dir = setup_session()
-        self.session_dir = session_dir
-
-        # Create transcript writer
-        self.transcript = TranscriptWriter(transcript_file)
-
+        """Initialize the Agno team."""
         # Load prompts
-        lead_agent_prompt = load_prompt("lead_agent.txt")
         job_finder_prompt = load_prompt("job_finder.txt")
         resume_writer_prompt = load_prompt("resume_writer.txt")
         cover_letter_prompt = load_prompt("cover_letter.txt")
-        email_agent_prompt = load_prompt("email_agent.txt")
         notion_agent_prompt = load_prompt("notion_agent.txt")
-        config_agent_prompt = load_prompt("config_agent.txt")
+        lead_agent_prompt = load_prompt("lead_agent.txt")
 
-        # Initialize subagent tracker
-        self.tracker = SubagentTracker(
-            transcript_writer=self.transcript,
-            session_dir=session_dir
+        # Create specialized agents
+        job_finder = Agent(
+            name="Job Finder",
+            role="Search for jobs using JobSpy across LinkedIn, Indeed, and Google",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[search_jobs, validate_job_url, read_file, write_file],
+            instructions=job_finder_prompt,
+            markdown=True,
         )
 
-        # Define specialized subagents
-        agents = {
-            "job-finder": AgentDefinition(
-                description=(
-                    "Use this agent when you need to search for jobs. "
-                    "The job-finder uses JobSpy to scrape jobs from LinkedIn, Indeed, and Google "
-                    "with filtering based on user preferences. Writes results to output/job_listings/ "
-                    "for use by other agents. Returns structured job data with titles, companies, URLs, and descriptions."
-                ),
-                tools=["Bash", "Read", "Write", "Glob"],
-                prompt=job_finder_prompt,
-                model="haiku"
-            ),
-            "resume-writer": AgentDefinition(
-                description=(
-                    "Use this agent when you need to create a customized resume for a specific job. "
-                    "The resume-writer reads the base resume from user_data/base_resume.json and optimizes it "
-                    "for ATS (Applicant Tracking Systems) by incorporating keywords from the job description. "
-                    "Generates both markdown and plain text versions in output/resumes/. "
-                    "Does NOT search for jobs - only creates resumes for jobs you provide."
-                ),
-                tools=["Read", "Write"],
-                prompt=resume_writer_prompt,
-                model="haiku"
-            ),
-            "cover-letter": AgentDefinition(
-                description=(
-                    "Use this agent when you need to generate a personalized cover letter for a job application. "
-                    "The cover-letter agent reads the base resume and job description, then creates a compelling "
-                    "3-paragraph cover letter that matches the candidate's experience with job requirements. "
-                    "Saves to output/cover_letters/. Does NOT search for jobs or create resumes."
-                ),
-                tools=["Read", "Write"],
-                prompt=cover_letter_prompt,
-                model="haiku"
-            ),
-            "email-agent": AgentDefinition(
-                description=(
-                    "Use this agent when you need to send job application emails. "
-                    "The email-agent sends individual emails per job with resume and cover letter attachments, "
-                    "or sends a daily summary email with all applications. "
-                    "Does NOT search for jobs or create materials - only sends emails."
-                ),
-                tools=["Bash", "Read"],
-                prompt=email_agent_prompt,
-                model="haiku"
-            ),
-            "notion-agent": AgentDefinition(
-                description=(
-                    "Use this agent when you need to track job applications in Notion. "
-                    "The notion-agent creates entries in your Notion database with job details, "
-                    "application status, and links to generated resumes/cover letters. "
-                    "Requires NOTION_API_KEY and NOTION_DATABASE_ID in environment. "
-                    "Does NOT search for jobs or create materials - only tracks them."
-                ),
-                tools=["Bash", "Read", "Write"],
-                prompt=notion_agent_prompt,
-                model="haiku"
-            ),
-            "config-agent": AgentDefinition(
-                description=(
-                    "Use this agent when you need to update user preferences or save resume data. "
-                    "The config-agent updates preferences.json when user wants to change job search settings "
-                    "(location, remote preference, blacklist, tech stack, etc.) and updates base_resume.json "
-                    "when user provides their resume information. Does NOT search for jobs or create materials."
-                ),
-                tools=["Read", "Write"],
-                prompt=config_agent_prompt,
-                model="haiku"
-            )
-        }
+        resume_writer = Agent(
+            name="Resume Writer",
+            role="Create customized ATS-optimized resumes for specific jobs",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
+            instructions=resume_writer_prompt,
+            markdown=True,
+        )
 
-        # Set up hooks for tracking
-        hooks = {
-            'PreToolUse': [
-                HookMatcher(
-                    matcher=None,
-                    hooks=[self.tracker.pre_tool_use_hook]
-                )
+        cover_letter_writer = Agent(
+            name="Cover Letter Writer",
+            role="Generate personalized cover letters for job applications",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
+            instructions=cover_letter_prompt,
+            markdown=True,
+        )
+
+        notion_agent = Agent(
+            name="Notion Agent",
+            role="Track job applications in Notion database",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[create_notion_entry, read_file],
+            instructions=notion_agent_prompt,
+            markdown=True,
+        )
+
+        email_agent = Agent(
+            name="Email Agent",
+            role="Send job application emails with attachments",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[send_email, read_file],
+            instructions="Send professional job application emails with resume and cover letter attachments.",
+            markdown=True,
+        )
+
+        # Create team with lead agent
+        self.team = Team(
+            name="Jobby Bot Team",
+            model=Claude(id="claude-sonnet-4-5-20250929"),
+            members=[
+                job_finder,
+                resume_writer,
+                cover_letter_writer,
+                notion_agent,
+                email_agent,
             ],
-            'PostToolUse': [
-                HookMatcher(
-                    matcher=None,
-                    hooks=[self.tracker.post_tool_use_hook]
-                )
-            ]
-        }
-
-        options = ClaudeAgentOptions(
-            permission_mode="bypassPermissions",
-            setting_sources=["project"],
-            system_prompt=lead_agent_prompt,
-            allowed_tools=["Task"],
-            agents=agents,
-            hooks=hooks,
-            model="haiku"
+            instructions=lead_agent_prompt,
+            markdown=True,
+            show_members_responses=False,
+            get_member_information_tool=True,
+            add_member_tools_to_context=True,
         )
-
-        self.client = ClaudeSDKClient(options=options)
-        await self.client.__aenter__()
 
     async def process_message(self, message: str) -> str:
         """Process a user message and return the agent's response."""
@@ -174,46 +123,35 @@ class JobbySession:
             return "⏳ I'm still processing your previous request. Please wait..."
 
         self.is_processing = True
-        response_parts = []
 
         try:
-            # Write user input to transcript
-            self.transcript.write_to_file(f"\n💼 User ({self.user_id}): {message}\n")
+            # Run the team synchronously in a thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.team.run(message)
+            )
 
-            # Send to agent
-            await self.client.query(prompt=message)
+            # Extract text from response
+            if hasattr(response, 'content'):
+                return response.content
+            elif isinstance(response, str):
+                return response
+            else:
+                return str(response)
 
-            self.transcript.write("🤖 Agent: ", end="")
-
-            # Collect response
-            async for msg in self.client.receive_response():
-                if type(msg).__name__ == 'AssistantMessage':
-                    # Process message and capture text output
-                    for block in msg.content:
-                        if hasattr(block, 'text'):
-                            response_parts.append(block.text)
-                            self.transcript.write(block.text, end="")
-
-            self.transcript.write("\n")
-
-            # Return combined response
-            return "\n".join(response_parts) if response_parts else "✅ Task completed!"
-
+        except Exception as e:
+            return f"❌ Error: {str(e)}"
         finally:
             self.is_processing = False
 
     async def cleanup(self):
         """Clean up session resources."""
-        if self.client:
-            await self.client.__aexit__(None, None, None)
-        if self.transcript:
-            self.transcript.close()
-        if self.tracker:
-            self.tracker.close()
+        self.team = None
 
 
 class JobbyBot(commands.Bot):
-    """Discord bot for Jobby Bot job application assistant."""
+    """Discord bot for Jobby Bot job application assistant using Agno."""
 
     def __init__(self, enable_auto_monitor: bool = False):
         intents = discord.Intents.default()
@@ -221,7 +159,7 @@ class JobbyBot(commands.Bot):
         intents.dm_messages = True
 
         super().__init__(
-            command_prefix="!",  # Keep for legacy support
+            command_prefix="!",
             intents=intents,
             help_command=None
         )
@@ -233,18 +171,14 @@ class JobbyBot(commands.Bot):
 
     async def setup_hook(self):
         """Called when the bot is ready."""
-        # Sync slash commands
         await self.tree.sync()
         print(f"🤖 Jobby Bot logged in as {self.user}")
         print(f"✅ Slash commands synced")
 
-        # Start auto job monitoring if enabled
         if self.enable_auto_monitor:
             print(f"🔄 Starting auto job monitor (interval: {self.check_interval_minutes} minutes)...")
-            # Initialize a dedicated session for the monitor
-            self.monitor_session = JobbySession(user_id=0)  # Use ID 0 for system monitor
+            self.monitor_session = JobbySession(user_id=0)
             await self.monitor_session.initialize()
-            # Start the loop
             self.auto_job_check.start()
             print("✅ Auto job monitor started")
 
@@ -262,7 +196,6 @@ class JobbyBot(commands.Bot):
         try:
             print(f"\n🔍 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running auto job check...")
 
-            # Load user preferences
             preferences_file = USER_DATA_DIR / "preferences.json"
             if not preferences_file.exists():
                 print("⚠️ No preferences.json found. Skipping check.")
@@ -271,14 +204,12 @@ class JobbyBot(commands.Bot):
             with open(preferences_file, 'r') as f:
                 preferences = json.load(f)
 
-            # Get search parameters
             default_search = preferences.get('default_search', {})
             search_term = default_search.get('search_term', 'software engineer')
             location = default_search.get('location', '')
             is_remote = default_search.get('is_remote', False)
             results_wanted = default_search.get('results_wanted', 10)
 
-            # Build query for recent jobs
             hours_old = max(1, self.check_interval_minutes // 30 + 1)
             query = f"Search for {results_wanted} {search_term} jobs posted in the last {hours_old} hours"
 
@@ -287,12 +218,10 @@ class JobbyBot(commands.Bot):
             if is_remote:
                 query += " (remote positions only)"
 
-            # Add email instruction
             query += ". Generate resumes and cover letters for matches, then send individual emails for each job to the configured recipient."
 
             print(f"📋 Query: {query}")
 
-            # Execute through the monitor session
             if self.monitor_session:
                 response = await self.monitor_session.process_message(query)
                 print(f"✅ Auto job check completed")
@@ -305,45 +234,36 @@ class JobbyBot(commands.Bot):
     async def before_auto_job_check(self):
         """Wait until the bot is ready before starting the loop."""
         await self.wait_until_ready()
-        # Update loop interval dynamically
         self.auto_job_check.change_interval(minutes=self.check_interval_minutes)
-        print(f"⏱️  Auto job check interval set to {self.check_interval_minutes} minutes")
+        print(f"⏱️ Auto job check interval set to {self.check_interval_minutes} minutes")
 
     async def on_message(self, message: discord.Message):
         """Handle incoming messages."""
-        # Ignore bot's own messages
         if message.author == self.user:
             return
 
-        # Only respond to DMs or messages in channels where bot is mentioned
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_mentioned = self.user in message.mentions
 
         if not (is_dm or is_mentioned):
-            # Process commands
             await self.process_commands(message)
             return
 
-        # Remove mention from message content
         content = message.content
         if is_mentioned:
             content = content.replace(f'<@{self.user.id}>', '').strip()
 
-        # Ignore empty messages
         if not content:
             return
 
-        # Show typing indicator
         async with message.channel.typing():
             try:
                 session = await self.get_or_create_session(message.author.id)
                 response = await session.process_message(content)
 
-                # Split long responses to fit Discord's 2000 character limit
                 if len(response) <= 2000:
                     await message.reply(response)
                 else:
-                    # Split into chunks
                     chunks = [response[i:i+2000] for i in range(0, len(response), 2000)]
                     for i, chunk in enumerate(chunks):
                         if i == 0:
@@ -368,7 +288,6 @@ from jobby_bot.discord_commands import (
 )
 
 
-# Define start command inline
 @app_commands.command(name="start", description="Show welcome message and bot capabilities")
 async def start_command(interaction: discord.Interaction):
     """Start a new Jobby Bot session."""
@@ -397,7 +316,6 @@ async def start_command(interaction: discord.Interaction):
 
 async def main():
     """Start the Discord bot."""
-    # Check for required API keys
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("\n❌ Error: ANTHROPIC_API_KEY not found.")
         print("Set it in a .env file or export it in your shell.")
@@ -411,13 +329,10 @@ async def main():
         print("Create a bot at: https://discord.com/developers/applications\n")
         return
 
-    # Check if auto monitoring should be enabled
     enable_monitor = os.getenv("ENABLE_AUTO_JOB_MONITOR", "false").lower() == "true"
 
-    # Create and run bot
     bot = JobbyBot(enable_auto_monitor=enable_monitor)
 
-    # Register slash commands
     bot.tree.add_command(start_command)
     bot.tree.add_command(help_command)
     bot.tree.add_command(end_command)
@@ -427,9 +342,10 @@ async def main():
     bot.tree.add_command(show_resume_command)
 
     print("\n" + "="*60)
-    print("🤖 JOBBY BOT - Discord Integration (Slash Commands)")
+    print("🤖 JOBBY BOT - Discord Integration (Agno Framework)")
     print("="*60)
-    print("✅ Using modern Discord slash commands (/start, /help, etc.)")
+    print("✅ Using Agno multi-agent framework")
+    print("✅ PDF generation with WeasyPrint (no Chrome needed)")
     if enable_monitor:
         check_interval = int(os.getenv("JOB_CHECK_INTERVAL_MINUTES", "30"))
         print(f"🔄 Auto job monitoring: ENABLED (every {check_interval} minutes)")
@@ -443,16 +359,6 @@ async def main():
         await bot.start(discord_token)
     except KeyboardInterrupt:
         print("\n\nShutting down...")
-        # Stop auto monitor if running
-        if bot.auto_monitor and bot.monitor_task:
-            print("🛑 Stopping auto job monitor...")
-            await bot.auto_monitor.stop()
-            bot.monitor_task.cancel()
-            try:
-                await bot.monitor_task
-            except asyncio.CancelledError:
-                pass
-        # Clean up all sessions
         for session in bot.sessions.values():
             await session.cleanup()
         await bot.close()
