@@ -1,16 +1,21 @@
-"""ATS-friendly PDF generator using Chrome CDP method (AIHawk approach)."""
+"""ATS-friendly PDF generator using WeasyPrint (Harvard Career Services format)."""
 
 from pathlib import Path
-from .chrome_pdf_generator import create_resume_pdf_chrome, create_cover_letter_pdf_chrome
+from weasyprint import HTML, CSS
 from .html_content_generator import generate_resume_html, generate_cover_letter_html
 
 
 def create_resume_pdf(content: str, output_path: str) -> str:
     """
-    Create resume PDF using Chrome CDP method (AIHawk approach).
+    Create resume PDF using WeasyPrint.
 
-    This provides pixel-perfect formatting by rendering HTML in Chrome
-    and using the browser's native print-to-PDF capability.
+    Uses Harvard Career Services format:
+    - Georgia font (professional serif)
+    - Centered name with underline
+    - Section headers with underlines
+    - Proper bullet point alignment (hanging indent)
+    - Job title LEFT, date RIGHT layout
+    - Clickable hyperlinks
 
     Args:
         content: Resume content in plain text
@@ -22,13 +27,24 @@ def create_resume_pdf(content: str, output_path: str) -> str:
     # Generate HTML from plain text content
     html_content = generate_resume_html(content)
 
-    # Convert HTML to PDF using Chrome CDP
-    return create_resume_pdf_chrome(html_content, output_path)
+    # Ensure output directory exists
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Convert HTML to PDF using WeasyPrint
+    HTML(string=html_content).write_pdf(output_path)
+
+    return output_path
 
 
 def create_cover_letter_pdf(content: str, output_path: str) -> str:
     """
-    Create cover letter PDF using Chrome CDP method.
+    Create cover letter PDF using WeasyPrint.
+
+    Uses Harvard Career Services format:
+    - Georgia font (professional serif)
+    - Clean paragraph spacing
+    - Proper margins (1 inch)
+    - Clickable hyperlinks
 
     Args:
         content: Cover letter content in plain text
@@ -40,5 +56,10 @@ def create_cover_letter_pdf(content: str, output_path: str) -> str:
     # Generate HTML from plain text content
     html_content = generate_cover_letter_html(content)
 
-    # Convert HTML to PDF using Chrome CDP
-    return create_cover_letter_pdf_chrome(html_content, output_path)
+    # Ensure output directory exists
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Convert HTML to PDF using WeasyPrint
+    HTML(string=html_content).write_pdf(output_path)
+
+    return output_path

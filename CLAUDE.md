@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-**Jobby Bot** is an AI-powered job application automation system built with the Claude Agent SDK. It orchestrates multiple specialized agents to handle job searching, resume customization, cover letter generation, and application tracking.
+**Jobby Bot** is an AI-powered job application automation system built with **Agno** framework. It orchestrates multiple specialized agents via `Team` to handle job searching, resume customization, cover letter generation, and application tracking.
 
 ### Core Architecture
 
-- **Multi-Agent System**: Lead orchestrator + specialized subagents
-- **Model Strategy**: Sonnet 4.5 for orchestration, Haiku 4.5 for task execution
-- **Communication**: File-based via `output/` folders
-- **Tracking**: Hooks for complete observability (`logs/session_*/`)
+- **Multi-Agent System**: Agno `Team` with specialized `Agent` members
+- **Model Strategy**: Sonnet 4.5 for Team orchestration, Haiku 4.5 for member agents
+- **Communication**: File-based via `output/` folders + custom `@tool` functions
+- **Tracking**: Session transcripts (`logs/session_*/`)
 
 ## Development Conventions
 
@@ -19,12 +19,11 @@
 - **No over-engineering**: Avoid adding features not explicitly requested
 - **Security first**: No vulnerabilities, use production-ready patterns
 
-### 2. Agent Design Principles
-- **Single responsibility**: Each agent has ONE specific job
-- **Tool restrictions**: Lead agent ONLY uses `Task` tool
-- **Model selection**: Use Haiku for cost-effective subagents
-- **No cross-contamination**: Agents don't perform other agents' tasks
-- **Temporary scripts**: ALL agents use tmp/ folder for scripts, clean up before returning
+### 2. Agent Design Principles (Agno)
+- **Single responsibility**: Each `Agent` has ONE specific role
+- **Team orchestration**: `Team` coordinates members via `show_members_responses=True`
+- **Model selection**: Use Haiku for cost-effective member agents
+- **Custom tools**: Use `@tool` decorator for agent capabilities
 - **No summary files**: Agents NEVER create summary.md files, only final task output
 
 ### 3. File Organization
@@ -72,10 +71,10 @@ logs/
 
 ## Agent Definitions
 
-### Lead Agent (Orchestrator)
-- **Model**: claude-sonnet-4-5
-- **Tools**: `Task` ONLY (spawns subagents)
-- **Role**: Workflow coordination, no direct execution
+### Team (Orchestrator)
+- **Model**: claude-sonnet-4-5-20250514
+- **Type**: Agno `Team` with member agents
+- **Role**: Workflow coordination, delegates to member agents
 - **Interactive**: ALWAYS asks user to confirm job selections, emails, Notion tracking
 - **Prompt**: `prompts/lead_agent.txt`
 
@@ -89,78 +88,70 @@ logs/
 7. Ask before sending summary email (if configured)
 
 ### Job Finder Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Bash`, `Read`, `Write`, `Glob`
+- **Model**: claude-haiku-4-5-20250514
+- **Tools**: `search_jobs`, `read_file`, `write_file` (custom @tool functions)
 - **Role**: Scrape jobs via JobSpy (LinkedIn, Indeed, Google)
 - **Output**: `output/job_listings/jobs_TIMESTAMP.csv`
-- **Prompt**: `prompts/job_finder.txt`
 
 ### Resume Writer Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Read`, `Write`, `Bash`
+- **Model**: claude-haiku-4-5-20250514
+- **Tools**: `read_file`, `write_file`, `generate_pdf`
 - **Input**: `user_data/base_resume.json` (JSON Resume format)
-- **Output**: `output/resumes/job_N_resume.{pdf,md,txt}` - ATS optimization with keyword extraction
-- **Prompt**: `prompts/resume_writer.txt`
+- **Output**: `output/resumes/job_N_resume.{pdf,md,txt}` - ATS optimization
 
 ### Cover Letter Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Read`, `Write`, `Bash`
-- **Output**: `output/cover_letters/job_N_cover_letter.{pdf,txt}` - 3-paragraph professional letter
-- **Prompt**: `prompts/cover_letter.txt`
+- **Model**: claude-haiku-4-5-20250514
+- **Tools**: `read_file`, `write_file`, `generate_pdf`
+- **Output**: `output/cover_letters/job_N_cover_letter.{pdf,txt}`
 
 ### Email Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Bash`, `Read`
-- **Role**: Send individual job emails + daily summary via SMTP with PDF attachments
+- **Model**: claude-haiku-4-5-20250514
+- **Tools**: `send_email`, `read_file`
 - **Requires**: `SMTP_SERVER`, `SMTP_PORT`, `SENDER_EMAIL`, `SENDER_PASSWORD`, `RECIPIENT_EMAIL`
-- **Prompt**: `prompts/email_agent.txt`
-
-### Config Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Read`, `Write`
-- **Role**: Update preferences.json and base_resume.json when user provides config changes
-- **Prompt**: `prompts/config_agent.txt`
 
 ### Notion Agent
-- **Model**: claude-haiku-4-5
-- **Tools**: `Bash`, `Read`, `Write`
-- **Role**: Track applications in Notion database
+- **Model**: claude-haiku-4-5-20250514
+- **Tools**: `create_notion_entry`, `read_file`
 - **Requires**: `NOTION_API_KEY`, `NOTION_DATABASE_ID`
-- **Prompt**: `prompts/notion_agent.txt`
 
 ## Common Development Patterns
 
-### Adding a New Agent
+### Adding a New Agent (Agno)
 
 1. **Create prompt file**: `jobby_bot/prompts/new_agent.txt`
 2. **Define agent** in `agent.py`:
 ```python
-agents = {
-    "new-agent": AgentDefinition(
-        description="Clear description of when to use this agent",
-        tools=["Read", "Write"],  # Minimal tools needed
-        prompt=load_prompt("new_agent.txt"),
-        model="haiku"  # Use haiku unless complexity requires sonnet
-    )
-}
+new_agent = Agent(
+    name="New Agent",
+    role="Clear description of agent role",
+    model=Claude(id="claude-haiku-4-5-20251001"),
+    tools=[custom_tool_function],
+    instructions=load_prompt("new_agent.txt"),
+    markdown=True,
+)
 ```
-3. **Update lead agent prompt** to reference new capability
+3. **Add to team members** in `create_team()` function
 
-### Creating Custom Tools
+### Creating Custom Tools (Agno)
 
-1. **Implement tool** in `jobby_bot/tools/`:
+Use the `@tool` decorator for custom tools:
 ```python
-class NewTool(Tool):
-    name: Literal["NewTool"]
-    description: str = "What this tool does"
+from agno.tools import tool
 
-    def execute(self, context: ToolContext) -> ToolResult:
-        # Implementation
-        return ToolResult(output="result")
+@tool
+def custom_tool(param: str) -> str:
+    """Tool description for the model.
+
+    Args:
+        param: Parameter description
+
+    Returns:
+        Result description
+    """
+    # Implementation
+    return "result"
 ```
-
-2. **Register in tools/__init__.py**
-3. **Add to agent's allowed tools** in agent definition
+Add to agent's `tools=[]` list
 
 ### PDF Generation (AIHawk Chrome CDP Approach)
 
@@ -189,17 +180,7 @@ create_cover_letter_pdf(text_content, "output/cover_letters/cover_letter.pdf")
 
 ### Session Tracking
 
-All tool calls are automatically tracked via hooks:
-
-```python
-# Pre-execution hook
-tracker.pre_tool_use_hook(agent_id, tool_name, params)
-
-# Post-execution hook
-tracker.post_tool_use_hook(agent_id, tool_name, result)
-```
-
-Logs saved to: `logs/session_TIMESTAMP/tool_calls.jsonl`
+Transcripts saved to: `logs/session_TIMESTAMP/transcript.txt`
 
 ## Environment Configuration
 
@@ -272,7 +253,7 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 ## Key Dependencies
 
 ### Core
-- `claude-agent-sdk ^0.1.0` - Multi-agent framework
+- `agno` - Multi-agent framework with Team/Agent pattern
 - `anthropic ^0.39.0` - Claude API client
 
 ### Job Search
@@ -282,16 +263,8 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 - `discord.py ^2.3.0` - Discord bot interface
 - `notion-client ^2.2.1` - Notion database integration
 
-### Document Generation
-- `selenium ^4.38.0` - Chrome CDP for pixel-perfect PDF rendering (AIHawk approach)
-- `webdriver-manager ^4.0.2` - Automated ChromeDriver management
-- `pdfplumber ^0.11.0` - PDF text extraction for resume conversion
-
 ### Utilities
-- `pydantic ^2.0.0` - Data validation
-- `python-dotenv ^1.0.0` - Environment management
-- `pandas ^2.0.0` - Data manipulation
-- `jinja2 ^3.1.0` - Template rendering
+- `pydantic ^2.0.0`, `python-dotenv ^1.0.0`, `pandas ^2.0.0`
 
 ## Best Practices
 
@@ -332,7 +305,7 @@ Potential areas for expansion:
 
 ## Resources
 
-- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk), [Discord.py](https://discordpy.readthedocs.io/), [Notion API](https://developers.notion.com/)
+- [Agno Docs](https://docs.agno.com/), [Discord.py](https://discordpy.readthedocs.io/), [Notion API](https://developers.notion.com/)
 
 ## Maintenance Notes
 

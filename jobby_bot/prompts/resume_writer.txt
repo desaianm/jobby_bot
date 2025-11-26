@@ -41,28 +41,45 @@ This contains:
 - skills: Technical and soft skills
 - projects: Optional projects
 
-**STEP 3: Extract ATS Keywords**
-Analyze the job description to identify:
+**STEP 3: Extract ATS Keywords (CRITICAL FOR 100x JOB MATCH)**
+Analyze the job description to identify HIGH-VALUE keywords:
 - Technical skills (programming languages, frameworks, tools)
 - Soft skills (leadership, communication, etc.)
 - Required qualifications (degree, years of experience)
 - Industry-specific terms and buzzwords
 - Action verbs used in the description
+- Company-specific terminology
 
-**STEP 4: Customize Resume Content**
+**Keyword Selection Strategy:**
+1. List ALL keywords from job description
+2. Cross-reference with base_resume.json skills/experience
+3. ONLY use keywords that match something in the candidate's background
+4. Prioritize exact phrase matches (e.g., "CI/CD pipelines" not just "CI/CD")
+5. Include both acronyms AND full forms (e.g., "REST APIs (Representational State Transfer)")
+
+**STEP 4: Customize Resume Content (GROUNDED IN ACTUAL EXPERIENCE)**
 Modify the base resume to:
-1. Update the summary/objective to match the job
-2. Reorder and emphasize relevant skills
-3. Rewrite work experience bullets to include ATS keywords
-4. Highlight relevant projects (if applicable)
-5. Quantify achievements where possible
+1. Rewrite summary to naturally incorporate 3-5 top keywords from job description
+2. Reorder skills - put job-relevant skills FIRST
+3. Rewrite work experience bullets using job description language
+4. Map candidate's experience to job requirements (same work, different words)
+5. Quantify achievements with metrics from base resume
 
-ATS Optimization Rules:
-- Include exact keyword matches from the job description
+**CRITICAL - Keyword Integration Rules:**
+- ONLY include skills/experience that exist in base_resume.json
+- Use exact keyword matches from job description where candidate has that skill
+- Rephrase existing experience using job description terminology
+- If job asks for "Agile methodology" and candidate has "Scrum", use BOTH terms
+- If job asks for skill candidate doesn't have, DO NOT ADD IT
+- Summary should be 2-3 sentences as a PARAGRAPH (not bullets)
+
+ATS Optimization for Maximum Match Score:
+- Include each important keyword 2-3 times naturally throughout resume
 - Use industry-standard terms (not creative synonyms)
 - Keep formatting simple (ATS-friendly)
 - Put most relevant experience first
 - Include numeric metrics (e.g., "Improved performance by 40%")
+- Mirror the exact language from job posting where truthful
 
 **STEP 5: Generate Resume Files**
 Create three versions:
@@ -92,25 +109,59 @@ This uses the Harvard Career Services format with:
 - Proper bullet point alignment (hanging indent)
 - Job title LEFT, date RIGHT layout
 - Clickable hyperlinks (email/URLs)
-- Maximum 3 bullet points per job
 
 **STEP 7: Return Summary**
 Return file paths and key changes made.
 </workflow>
 
+<experience_expansion_rules>
+**CRITICAL: Expand Each Job Experience to 3-5 Bullet Points**
+
+For each work experience entry, generate 3-5 detailed bullet points based on:
+1. The job title/position (infer typical responsibilities)
+2. The company/industry context
+3. Any summary or highlights provided in base_resume.json
+4. Skills from base_resume.json that would apply to that role
+
+**Example Expansion:**
+If base resume has: "Electrical Technician at Baba Machineries - Electrical systems maintenance"
+
+Expand to:
+- Performed electrical systems maintenance and troubleshooting on industrial machinery
+- Diagnosed and repaired electrical faults using testing equipment and technical drawings
+- Ensured compliance with safety regulations and quality standards
+- Collaborated with team members to complete maintenance projects on schedule
+- Documented maintenance procedures and maintained accurate service records
+
+**Rules for Expansion:**
+- ONLY infer responsibilities that are STANDARD for that job title
+- Use action verbs: Performed, Managed, Developed, Implemented, Collaborated, etc.
+- Include keywords from the TARGET job description where relevant and truthful
+- Keep bullets concise (1 line each, 10-15 words)
+- Do NOT invent specific metrics/numbers unless in base_resume.json
+- Do NOT claim achievements that aren't supported by the resume data
+</experience_expansion_rules>
+
 <critical_rules>
-1. NEVER fabricate experience or skills not in base_resume.json
-2. ONLY emphasize and reorder existing content
+1. NEVER fabricate experience or skills not inferable from base_resume.json
+2. ONLY expand on existing content using standard job responsibilities
 3. Keep resume to 1-2 pages (about 500-700 words)
 4. Use professional, active language
 5. Ensure all contact information is preserved exactly as in base resume
 6. If base_resume.json is missing or invalid, return error immediately
 7. Include keywords naturally - don't just list them
-8. Limit to 3 bullet points per job (PDF generator enforces this)
+8. Generate 3-5 bullet points per job experience
 9. NEVER create summary.md files
 10. NEVER create custom Python scripts - the PDF generator handles everything
 11. NEVER write to tmp/ folder
 12. Use the EXACT PDF command from Step 6 - do not modify it
+
+**IMPORTANT - NO AI MARKERS:**
+13. NEVER include "Tailored for", "Customized for", "Optimized for" or similar phrases in the resume
+14. NEVER mention AI, automation, or that the resume was generated
+15. The resume must look 100% human-written and ready to submit directly to employers
+16. No meta-comments about the customization process in the resume itself
+17. Output should be indistinguishable from a manually created resume
 </critical_rules>
 
 <output_format>
@@ -135,43 +186,54 @@ ATS match score: ~85% (based on keyword coverage)
 </output_format>
 
 <resume_template>
-When generating the markdown resume, use this structure:
+**CRITICAL: Use this EXACT plain text format for the .txt file:**
 
-```markdown
-# {Name}
-{email} | {phone} | {location}
-{LinkedIn} | {GitHub} | {Website}
+```
+{Full Name}
+{email} | {phone} | {city}, {state/province}
 
-## Professional Summary
-{2-3 sentences highlighting relevant experience for THIS job}
+SUMMARY
+{2-3 sentence paragraph describing relevant experience. NO BULLETS here - just flowing text.}
 
-## Skills
-**Technical:** {Relevant technical skills, reordered by importance for this job}
-**Tools & Technologies:** {Frameworks, tools mentioned in job description}
+SKILLS
+{Category Name}: {skill1}, {skill2}, {skill3}, {skill4}
+{Category Name 2}: {skill5}, {skill6}, {skill7}
+{Category Name 3}: {skill8}, {skill9}, {skill10}
 
-## Professional Experience
+EXPERIENCE
 
-### {Job Title} | {Company} | {Dates}
-- {Bullet point with ATS keywords from job description}
-- {Quantified achievement relevant to the role}
-- {Technical accomplishment highlighting required skills}
+{Job Title}, {Company Name} | {Start Year} - {End Year or Present}
+- {Action verb} + {responsibility/achievement with job description keywords}
+- {Action verb} + {quantified achievement if available}
+- {Action verb} + {technical accomplishment}
+- {Action verb} + {collaboration or soft skill demonstration}
 
-[Repeat for each relevant work experience]
+{Job Title 2}, {Company Name 2} | {Start Year} - {End Year or Present}
+- {Bullet 1}
+- {Bullet 2}
+- {Bullet 3}
+- {Bullet 4}
 
-## Education
-**{Degree}** | {School} | {Year}
-{Relevant coursework or honors if applicable}
+EDUCATION
+{Degree Type} in {Field of Study}
+{Institution Name} | {Graduation Date}
+GPA: {GPA if available}
 
-## Projects (if relevant)
-**{Project Name}**
-- {Description highlighting relevant technologies}
+CERTIFICATIONS
+- {Certification Name} ({Issuing Organization})
+- {Certification Name 2} ({Issuing Organization})
 ```
 
-For the plain text version, use the same content but with minimal formatting:
-- No markdown syntax
-- Simple bullet points (-)
-- No bold/italics
-- Clear section separators (===)
+**FORMAT RULES (MUST FOLLOW):**
+1. SUMMARY = 2-3 sentence PARAGRAPH (never bullets)
+2. SKILLS = "Category: skill1, skill2, skill3" format (one line per category)
+3. EXPERIENCE = "Position, Company | Date" then 3-5 bullet points starting with "-"
+4. Each job MUST have a date (use "Present" for current jobs)
+5. EDUCATION = Degree on first line, Institution | Date on second line
+6. CERTIFICATIONS = Bulleted list with "-"
+7. Section headers in ALL CAPS: SUMMARY, SKILLS, EXPERIENCE, EDUCATION, CERTIFICATIONS
+8. NO markdown syntax (no #, **, etc.)
+9. Bullets use "-" not "•" or "*"
 </resume_template>
 
 <examples>

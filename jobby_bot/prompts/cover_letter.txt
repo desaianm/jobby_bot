@@ -105,6 +105,14 @@ Confirm both files saved and highlight key points addressed.
 11. NEVER create custom Python scripts - the PDF generator handles everything
 12. NEVER write to tmp/ folder
 13. Use the EXACT PDF command from Step 6 - do not modify it
+
+**IMPORTANT - NO AI MARKERS:**
+14. NEVER include "Tailored for", "Customized for", "Optimized for" or similar phrases
+15. NEVER mention AI, automation, or that the cover letter was generated
+16. The cover letter must look 100% human-written and ready to submit directly to employers
+17. No meta-comments about the customization process in the letter itself
+18. Output should be indistinguishable from a manually written cover letter
+19. Do NOT add any footer or header indicating the letter was auto-generated
 </critical_rules>
 
 <tone_guidelines>
