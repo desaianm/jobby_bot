@@ -423,16 +423,29 @@ def send_email(
         if not recipient:
             return "Error: No recipient email provided and RECIPIENT_EMAIL not set in .env"
 
+        # Validate attachments exist BEFORE sending
+        valid_attachments = []
+        missing_attachments = []
+        for attachment in (attachments or []):
+            if attachment:
+                if os.path.exists(attachment):
+                    valid_attachments.append(attachment)
+                else:
+                    missing_attachments.append(attachment)
+
+        if missing_attachments:
+            return f"❌ Error: Attachment files not found:\n" + "\n".join(f"  - {f}" for f in missing_attachments) + "\n\nPlease ensure files are generated before sending email."
+
         # Send email
         success = sender._send_email(
             recipient_email=recipient,
             subject=subject,
             body_html=body,
-            attachments=attachments or []
+            attachments=valid_attachments
         )
 
         if success:
-            attachment_names = [os.path.basename(a) for a in (attachments or []) if a]
+            attachment_names = [os.path.basename(a) for a in valid_attachments]
             return f"✅ Email sent successfully to {recipient}\nSubject: {subject}\nAttachments: {', '.join(attachment_names) if attachment_names else 'None'}"
         else:
             return "❌ Failed to send email. Check SMTP configuration."
