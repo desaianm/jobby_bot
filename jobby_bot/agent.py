@@ -173,6 +173,101 @@ def generate_pdf(text_path: str, pdf_path: str, doc_type: str = "resume") -> str
 
 
 @tool
+def screenshot_pdf(pdf_path: str, output_image_path: str = None, page_num: int = 0) -> str:
+    """Take a screenshot of a PDF page for visual verification.
+
+    Args:
+        pdf_path: Path to the PDF file
+        output_image_path: Path for the output image (default: same as PDF with .png)
+        page_num: Page number to screenshot (0-indexed, default: 0 for first page)
+
+    Returns:
+        Path to the generated image or error message
+    """
+    try:
+        import fitz  # PyMuPDF
+
+        if output_image_path is None:
+            output_image_path = pdf_path.replace('.pdf', f'_page{page_num}.png')
+
+        # Open the PDF
+        doc = fitz.open(pdf_path)
+
+        if page_num >= len(doc):
+            return f"Error: PDF only has {len(doc)} pages, requested page {page_num}"
+
+        # Get the page and render to image
+        page = doc[page_num]
+        # High resolution: 2x zoom for clarity
+        mat = fitz.Matrix(2, 2)
+        pix = page.get_pixmap(matrix=mat)
+
+        # Save the image
+        pix.save(output_image_path)
+        doc.close()
+
+        return f"Screenshot saved: {output_image_path}"
+    except ImportError:
+        return "Error: PyMuPDF not installed. Run: pip install PyMuPDF"
+    except Exception as e:
+        return f"Error taking screenshot: {str(e)}"
+
+
+@tool
+def generate_html_from_text(text_path: str, html_path: str, doc_type: str = "resume") -> str:
+    """Generate HTML from text file without creating PDF. Useful for editing HTML directly.
+
+    Args:
+        text_path: Path to the source text file
+        html_path: Path for the output HTML file
+        doc_type: Type of document - 'resume' or 'cover_letter'
+
+    Returns:
+        Success or error message
+    """
+    try:
+        from jobby_bot.utils.html_content_generator import generate_resume_html, generate_cover_letter_html
+
+        with open(text_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if doc_type == "resume":
+            html_content = generate_resume_html(content)
+        else:
+            html_content = generate_cover_letter_html(content)
+
+        os.makedirs(os.path.dirname(html_path), exist_ok=True)
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        return f"HTML created successfully: {html_path}"
+    except Exception as e:
+        return f"Error generating HTML: {str(e)}"
+
+
+@tool
+def generate_pdf_from_html(html_path: str, pdf_path: str) -> str:
+    """Generate PDF from HTML file. Use after editing HTML directly.
+
+    Args:
+        html_path: Path to the HTML file
+        pdf_path: Path for the output PDF file
+
+    Returns:
+        Success or error message
+    """
+    try:
+        from weasyprint import HTML
+
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        HTML(filename=html_path).write_pdf(pdf_path)
+
+        return f"PDF created from HTML: {pdf_path}"
+    except Exception as e:
+        return f"Error generating PDF from HTML: {str(e)}"
+
+
+@tool
 def create_notion_entry(
     job_title: str,
     company: str,
@@ -350,22 +445,22 @@ def create_agents():
         markdown=True,
     )
 
-    # Resume Writer Agent
+    # Resume Writer Agent - with visual verification and HTML editing tools
     resume_writer = Agent(
         name="Resume Writer",
         role="Create customized ATS-optimized resumes for specific jobs",
         model=Claude(id="claude-haiku-4-5-20251001"),
-        tools=[read_file, write_file, generate_pdf],
+        tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
         instructions=resume_writer_prompt,
         markdown=True,
     )
 
-    # Cover Letter Agent
+    # Cover Letter Agent - with visual verification and HTML editing tools
     cover_letter_writer = Agent(
         name="Cover Letter Writer",
         role="Generate personalized cover letters for job applications",
         model=Claude(id="claude-haiku-4-5-20251001"),
-        tools=[read_file, write_file, generate_pdf],
+        tools=[read_file, write_file, generate_pdf, screenshot_pdf, generate_html_from_text, generate_pdf_from_html],
         instructions=cover_letter_prompt,
         markdown=True,
     )

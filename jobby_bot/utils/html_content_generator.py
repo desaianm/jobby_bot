@@ -47,8 +47,9 @@ def generate_resume_html(content: str) -> str:
     is_first_line = True
     contact_collected = False
 
-    # Section content collectors
-    certifications_html = []  # Collect certifications separately for page-break handling
+    # Section content collectors - each section wrapped to avoid page breaks
+    current_section_html = []  # Collect current section content
+    current_job_html = []  # Collect current job entry (title + bullets)
 
     for line in lines:
         line_stripped = line.strip()
@@ -101,15 +102,21 @@ def generate_resume_html(content: str) -> str:
 
         for section_type, keywords in section_keywords.items():
             if any(kw in upper_line for kw in keywords) and len(line_stripped.split()) <= 4:
+                # Flush previous job entry if any
+                if current_job_html:
+                    current_section_html.append(f'<div class="job-entry">{"".join(current_job_html)}</div>')
+                    current_job_html = []
+
+                # Flush previous section if any
+                if current_section_html:
+                    html_body.append(f'<div class="section-container">{"".join(current_section_html)}</div>')
+                    current_section_html = []
+
                 current_section = section_type
                 is_section_header = True
 
-                # Add section header (certifications go to separate collector)
-                header_html = f'<h2 class="section">{line_stripped}</h2>'
-                if current_section == 'certifications':
-                    certifications_html.append(header_html)
-                else:
-                    html_body.append(header_html)
+                # Start new section with header
+                current_section_html.append(f'<h2 class="section">{line_stripped}</h2>')
                 break
 
         if is_section_header:
@@ -119,7 +126,7 @@ def generate_resume_html(content: str) -> str:
 
         # --- SUMMARY SECTION: Paragraph text ---
         if current_section == 'summary':
-            html_body.append(f'<div class="summary-text">{line_stripped}</div>')
+            current_section_html.append(f'<div class="summary-text">{line_stripped}</div>')
             continue
 
         # --- SKILLS SECTION: "Category: skill1, skill2, skill3" format ---
@@ -128,10 +135,10 @@ def generate_resume_html(content: str) -> str:
                 colon_pos = line_stripped.find(':')
                 category = line_stripped[:colon_pos].strip()
                 skills_text = line_stripped[colon_pos+1:].strip()
-                html_body.append(f'<div class="skill-category"><strong>{category}:</strong> {skills_text}</div>')
+                current_section_html.append(f'<div class="skill-category"><strong>{category}:</strong> {skills_text}</div>')
             else:
                 # Fallback: plain text or comma-separated without category
-                html_body.append(f'<div class="skill-line">{line_stripped}</div>')
+                current_section_html.append(f'<div class="skill-line">{line_stripped}</div>')
             continue
 
         # --- EXPERIENCE/PROJECTS SECTION: Job titles + bullets ---
@@ -141,24 +148,34 @@ def generate_resume_html(content: str) -> str:
             if ',' in line_stripped and '|' in line_stripped and not line_stripped.startswith('-'):
                 pipe_match = re.search(r'\|\s*(.+)$', line_stripped)
                 if pipe_match:
+                    # Flush previous job entry if starting a new one
+                    if current_job_html:
+                        current_section_html.append(f'<div class="job-entry">{"".join(current_job_html)}</div>')
+                        current_job_html = []
+
                     date_part = pipe_match.group(1).strip()
                     title_part = line_stripped[:pipe_match.start()].strip().rstrip('|').strip()
-                    html_body.append(f'<div class="job-row"><span class="job-title">{title_part}</span><span class="job-date">{date_part}</span></div>')
+                    current_job_html.append(f'<div class="job-row"><span class="job-title">{title_part}</span><span class="job-date">{date_part}</span></div>')
                     continue
 
             # Check if this is a job title without pipe (short line with comma)
             if ',' in line_stripped and not line_stripped.startswith('-') and len(line_stripped.split()) <= 8:
-                html_body.append(f'<div class="job-row"><span class="job-title">{line_stripped}</span><span class="job-date"></span></div>')
+                # Flush previous job entry if starting a new one
+                if current_job_html:
+                    current_section_html.append(f'<div class="job-entry">{"".join(current_job_html)}</div>')
+                    current_job_html = []
+
+                current_job_html.append(f'<div class="job-row"><span class="job-title">{line_stripped}</span><span class="job-date"></span></div>')
                 continue
 
-            # Bullet points
+            # Bullet points - add to current job entry
             if line_stripped.startswith('-') or line_stripped.startswith('•') or line_stripped.startswith('*'):
                 bullet_text = line_stripped.lstrip('-•* ').strip()
-                html_body.append(f'<div class="bullet"><span class="bullet-char">•</span><span class="bullet-text">{bullet_text}</span></div>')
+                current_job_html.append(f'<div class="bullet"><span class="bullet-char">•</span><span class="bullet-text">{bullet_text}</span></div>')
                 continue
 
             # Regular text in experience (treat as description)
-            html_body.append(f'<div class="body">{line_stripped}</div>')
+            current_job_html.append(f'<div class="body">{line_stripped}</div>')
             continue
 
         # --- EDUCATION SECTION ---
@@ -169,34 +186,37 @@ def generate_resume_html(content: str) -> str:
                 if pipe_match:
                     date_part = pipe_match.group(1).strip()
                     inst_part = line_stripped[:pipe_match.start()].strip().rstrip('|').strip()
-                    html_body.append(f'<div class="edu-row"><span class="edu-inst">{inst_part}</span><span class="edu-date">{date_part}</span></div>')
+                    current_section_html.append(f'<div class="edu-row"><span class="edu-inst">{inst_part}</span><span class="edu-date">{date_part}</span></div>')
                     continue
 
             # GPA line
             if line_stripped.upper().startswith('GPA'):
-                html_body.append(f'<div class="edu-detail">{line_stripped}</div>')
+                current_section_html.append(f'<div class="edu-detail">{line_stripped}</div>')
                 continue
 
             # Degree/program line (usually first line after header)
-            html_body.append(f'<div class="edu-degree">{line_stripped}</div>')
+            current_section_html.append(f'<div class="edu-degree">{line_stripped}</div>')
             continue
 
-        # --- CERTIFICATIONS SECTION: Goes to separate collector ---
+        # --- CERTIFICATIONS SECTION ---
         if current_section == 'certifications':
             if line_stripped.startswith('-') or line_stripped.startswith('•') or line_stripped.startswith('*'):
                 bullet_text = line_stripped.lstrip('-•* ').strip()
-                certifications_html.append(f'<div class="bullet"><span class="bullet-char">•</span><span class="bullet-text">{bullet_text}</span></div>')
+                current_section_html.append(f'<div class="bullet"><span class="bullet-char">•</span><span class="bullet-text">{bullet_text}</span></div>')
             else:
-                certifications_html.append(f'<div class="cert-item">{line_stripped}</div>')
+                current_section_html.append(f'<div class="cert-item">{line_stripped}</div>')
             continue
 
         # DEFAULT: Regular body text
-        html_body.append(f'<div class="body">{line_stripped}</div>')
+        current_section_html.append(f'<div class="body">{line_stripped}</div>')
 
-    # Build certifications section with page-break protection
-    certs_section = ''
-    if certifications_html:
-        certs_section = f'<div class="certifications-container">{"".join(certifications_html)}</div>'
+    # Flush any remaining job entry
+    if current_job_html:
+        current_section_html.append(f'<div class="job-entry">{"".join(current_job_html)}</div>')
+
+    # Flush any remaining section
+    if current_section_html:
+        html_body.append(f'<div class="section-container">{"".join(current_section_html)}</div>')
 
     # Build complete HTML
     html_content = f"""<!DOCTYPE html>
@@ -337,10 +357,17 @@ def generate_resume_html(content: str) -> str:
             margin: 0 0 2pt 0;
         }}
 
-        /* CERTIFICATIONS: Keep together on same page */
-        .certifications-container {{
+        /* SECTION CONTAINERS: Keep each section together on same page */
+        .section-container {{
             page-break-inside: avoid;
             break-inside: avoid;
+        }}
+
+        /* JOB ENTRIES: Keep job title + bullets together */
+        .job-entry {{
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 4pt;
         }}
 
         .cert-item {{
@@ -358,7 +385,6 @@ def generate_resume_html(content: str) -> str:
 </head>
 <body>
     {''.join(html_body)}
-    {certs_section}
 </body>
 </html>"""
 
