@@ -8,7 +8,8 @@
 
 - **Multi-Agent System**: Agno `Team` with specialized `Agent` members
 - **Model Strategy**: Sonnet 4.5 for Team orchestration, Haiku 4.5 for member agents
-- **Communication**: File-based via `output/` folders + custom `@tool` functions
+- **Multi-User Support**: SQLite database stores per-user resumes, preferences, and settings
+- **Communication**: File-based via `output/{user_id}/` folders + custom `@tool` functions
 - **Tracking**: Session transcripts (`logs/session_*/`)
 
 ## Development Conventions
@@ -32,42 +33,35 @@ jobby_bot/
 ├── agent.py              # CLI orchestrator entry point
 ├── discord_bot.py        # Discord bot with slash commands + tasks.loop auto-monitor
 ├── discord_commands.py   # Slash command definitions (upload-resume, set-preferences, etc.)
+├── database.py           # SQLite multi-user data storage
 ├── auto_job_monitor.py   # Standalone monitor (deprecated, use Discord tasks.loop)
+├── data/                 # SQLite database storage
+│   └── jobby_bot.db
 ├── prompts/              # Agent system prompts (txt files)
-│   ├── lead_agent.txt
-│   ├── job_finder.txt
-│   ├── resume_writer.txt
-│   ├── cover_letter.txt
-│   ├── email_agent.txt
-│   ├── notion_agent.txt
-│   └── config_agent.txt
 ├── tools/                # Custom tools for agents
-│   ├── jobspy_tool.py
-│   └── notion_tool.py
 ├── utils/                # Shared utilities
-│   ├── subagent_tracker.py
-│   ├── transcript.py
-│   ├── message_handler.py
-│   ├── email_sender.py
-│   ├── pdf_generator.py         # Main PDF interface
-│   ├── chrome_pdf_generator.py  # Chrome CDP rendering (AIHawk method)
-│   └── html_content_generator.py # HTML generation with smart formatting
 └── tmp/                  # Temporary scripts (auto-cleaned by agents)
-    └── .gitkeep
 ```
 
-### 4. Output Structure
+### 4. Output Structure (Per-User)
 ```
 output/
-├── job_listings/         # CSV files from JobSpy
-├── resumes/             # Generated resumes (pdf + md + txt)
-└── cover_letters/       # Generated cover letters (pdf + txt)
+├── {discord_user_id}/    # Per-user output folders
+│   ├── job_listings/     # CSV files from JobSpy
+│   ├── resumes/          # Generated resumes (pdf + md + txt)
+│   └── cover_letters/    # Generated cover letters (pdf + txt)
 
 logs/
 └── session_TIMESTAMP/
-    ├── transcript.txt   # Human-readable conversation
-    └── tool_calls.jsonl # Structured tool invocations
+    ├── transcript.txt    # Human-readable conversation
+    └── tool_calls.jsonl  # Structured tool invocations
 ```
+
+### 5. Database Schema (SQLite)
+- **users**: discord_user_id, email, auto_monitor_enabled
+- **resumes**: user_id (FK), resume_json (JSON Resume format)
+- **preferences**: user_id (FK), preferences_json (search settings)
+- **monitor_state**: user_id (FK), processed_jobs, last_check
 
 ## Agent Definitions
 
@@ -203,10 +197,22 @@ SENDER_PASSWORD=app_password            # Email password or app password
 RECIPIENT_EMAIL=your@email.com          # Where to receive job emails
 ```
 
-### User Data Files
-- `user_data/base_resume.json` - Your resume (JSON Resume format)
-- `user_data/preferences.json` - Search filters, blacklists, preferences
-- `user_data/monitor_state.json` - Auto-generated state for job monitoring (tracks processed jobs)
+### User Data Storage (Multi-User)
+User data is stored in SQLite database (`jobby_bot/data/jobby_bot.db`):
+- Resumes and preferences stored per Discord user ID
+- Auto-monitor opt-in status per user
+- Email addresses for job notifications
+
+### Discord Slash Commands
+| Command | Description |
+|---------|-------------|
+| `/upload-resume` | Upload resume (PDF/TXT) |
+| `/set-preferences` | Update job search settings |
+| `/show-resume` | View current resume summary |
+| `/show-preferences` | View settings and account info |
+| `/set-email` | Set email for job notifications |
+| `/enable-auto-monitor` | Enable automatic job alerts |
+| `/disable-auto-monitor` | Disable automatic job alerts |
 
 ## Testing and Debugging
 

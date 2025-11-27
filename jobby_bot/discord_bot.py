@@ -28,12 +28,24 @@ from jobby_bot.agent import (
     validate_job_url,
     load_prompt,
 )
+from jobby_bot.database import (
+    init_db,
+    get_or_create_user,
+    get_user_resume,
+    get_user_preferences,
+    save_user_preferences,
+    get_auto_monitor_users,
+    get_monitor_state,
+    save_monitor_state,
+)
 
 # Load environment variables
 load_dotenv()
 
-# Paths - user_data is inside the jobby_bot module
+# Paths - user_data is inside the jobby_bot module (kept for backward compatibility)
 USER_DATA_DIR = Path(__file__).parent / "user_data"
+# Output directory for per-user files
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
 
 
 class JobbySession:
@@ -136,56 +148,57 @@ class JobbySession:
         )
 
     def _load_user_context(self) -> str:
-        """Load user preferences and resume info to inject into messages."""
+        """Load user preferences and resume info from database."""
         context_parts = []
         debug_mode = os.getenv("AGNO_DEBUG", "false").lower() == "true"
 
-        # Load preferences
-        prefs_file = USER_DATA_DIR / "preferences.json"
+        # Load preferences from database
+        prefs = get_user_preferences(self.user_id)
         if debug_mode:
-            print(f"DEBUG: Looking for preferences at: {prefs_file}")
-            print(f"DEBUG: File exists: {prefs_file.exists()}")
+            print(f"DEBUG: Loading preferences for user {self.user_id}")
+            print(f"DEBUG: Preferences found: {prefs is not None}")
 
-        if prefs_file.exists():
-            try:
-                with open(prefs_file, 'r') as f:
-                    prefs = json.load(f)
-                if debug_mode:
-                    print(f"DEBUG: Loaded prefs keys: {list(prefs.keys())}")
-                default_search = prefs.get('default_search', {})
-                if debug_mode:
-                    print(f"DEBUG: default_search: {default_search}")
-                context_parts.append(f"""<user_preferences>
+        if prefs:
+            if debug_mode:
+                print(f"DEBUG: Loaded prefs keys: {list(prefs.keys())}")
+            default_search = prefs.get('default_search', {})
+            if debug_mode:
+                print(f"DEBUG: default_search: {default_search}")
+            context_parts.append(f"""<user_preferences>
 Search Term: {default_search.get('search_term', 'not set')}
 Location: {default_search.get('location', 'not set')}
 Remote: {default_search.get('is_remote', False)}
 Results Wanted: {default_search.get('results_wanted', 20)}
 </user_preferences>""")
-            except Exception as e:
-                print(f"ERROR loading preferences: {e}")
         else:
-            print(f"WARNING: preferences.json not found at {prefs_file}")
+            if debug_mode:
+                print(f"DEBUG: No preferences found for user {self.user_id}")
 
-        # Load resume info
-        resume_file = USER_DATA_DIR / "base_resume.json"
+        # Load resume from database
+        resume = get_user_resume(self.user_id)
         if debug_mode:
-            print(f"DEBUG: Looking for resume at: {resume_file}")
-            print(f"DEBUG: File exists: {resume_file.exists()}")
+            print(f"DEBUG: Loading resume for user {self.user_id}")
+            print(f"DEBUG: Resume found: {resume is not None}")
 
-        if resume_file.exists():
-            try:
-                with open(resume_file, 'r') as f:
-                    resume = json.load(f)
-                basics = resume.get('basics', {})
-                context_parts.append(f"""<user_resume>
+        if resume:
+            basics = resume.get('basics', {})
+            context_parts.append(f"""<user_resume>
 Name: {basics.get('name', 'not set')}
 Email: {basics.get('email', 'not set')}
-Resume file: user_data/base_resume.json (EXISTS)
+Resume: loaded from database
 </user_resume>""")
-            except Exception as e:
-                print(f"ERROR loading resume: {e}")
         else:
-            print(f"WARNING: base_resume.json not found at {resume_file}")
+            if debug_mode:
+                print(f"DEBUG: No resume found for user {self.user_id}")
+
+        # Add user output directory info
+        user_output_dir = OUTPUT_DIR / str(self.user_id)
+        context_parts.append(f"""<user_output_directory>
+Output path: {user_output_dir}
+Resumes: {user_output_dir}/resumes/
+Cover Letters: {user_output_dir}/cover_letters/
+Job Listings: {user_output_dir}/job_listings/
+</user_output_directory>""")
 
         return "\n".join(context_parts)
 
@@ -312,16 +325,18 @@ class JobbyBot(commands.Bot):
 
     async def setup_hook(self):
         """Called when the bot is ready."""
+        # Initialize database
+        init_db()
+        print("✅ Database initialized")
+
         await self.tree.sync()
         print(f"🤖 Jobby Bot logged in as {self.user}")
         print(f"✅ Slash commands synced")
 
         if self.enable_auto_monitor:
             print(f"🔄 Starting auto job monitor (interval: {self.check_interval_minutes} minutes)...")
-            self.monitor_session = JobbySession(user_id=0)
-            await self.monitor_session.initialize()
             self.auto_job_check.start()
-            print("✅ Auto job monitor started")
+            print("✅ Auto job monitor started (multi-user mode)")
 
     async def get_or_create_session(self, user_id: int) -> JobbySession:
         """Get existing session or create a new one for a user."""
@@ -333,40 +348,61 @@ class JobbyBot(commands.Bot):
 
     @tasks.loop(minutes=30)
     async def auto_job_check(self):
-        """Automatically check for new jobs every N minutes."""
+        """Automatically check for new jobs for all opted-in users."""
         try:
             print(f"\n🔍 [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running auto job check...")
 
-            preferences_file = USER_DATA_DIR / "preferences.json"
-            if not preferences_file.exists():
-                print("⚠️ No preferences.json found. Skipping check.")
+            # Get all users who have opted in to auto-monitoring
+            users = get_auto_monitor_users()
+
+            if not users:
+                print("⚠️ No users have auto-monitoring enabled. Skipping check.")
                 return
 
-            with open(preferences_file, 'r') as f:
-                preferences = json.load(f)
+            print(f"📊 Found {len(users)} user(s) with auto-monitoring enabled")
 
-            default_search = preferences.get('default_search', {})
-            search_term = default_search.get('search_term', 'software engineer')
-            location = default_search.get('location', '')
-            is_remote = default_search.get('is_remote', False)
-            results_wanted = default_search.get('results_wanted', 10)
+            for user_data in users:
+                discord_user_id = user_data['discord_user_id']
+                discord_username = user_data.get('discord_username', 'Unknown')
+                email = user_data['email']
+                preferences = user_data['preferences']
 
-            hours_old = max(1, self.check_interval_minutes // 30 + 1)
-            query = f"Search for {results_wanted} {search_term} jobs posted in the last {hours_old} hours"
+                print(f"\n👤 Processing user: {discord_username} (ID: {discord_user_id})")
 
-            if location:
-                query += f" in {location}"
-            if is_remote:
-                query += " (remote positions only)"
+                try:
+                    default_search = preferences.get('default_search', {})
+                    search_term = default_search.get('search_term', 'software engineer')
+                    location = default_search.get('location', '')
+                    is_remote = default_search.get('is_remote', False)
+                    results_wanted = default_search.get('results_wanted', 10)
 
-            query += ". Generate resumes and cover letters for matches, then send individual emails for each job to the configured recipient."
+                    hours_old = max(1, self.check_interval_minutes // 30 + 1)
+                    query = f"Search for {results_wanted} {search_term} jobs posted in the last {hours_old} hours"
 
-            print(f"📋 Query: {query}")
+                    if location:
+                        query += f" in {location}"
+                    if is_remote:
+                        query += " (remote positions only)"
 
-            if self.monitor_session:
-                response = await self.monitor_session.process_message(query)
-                print(f"✅ Auto job check completed")
-                print(f"Response summary: {response[:200]}...")
+                    query += f". Generate resumes and cover letters for matches, then send individual emails for each job to {email}."
+
+                    print(f"📋 Query for {discord_username}: {query[:100]}...")
+
+                    # Create or get session for this user
+                    session = await self.get_or_create_session(discord_user_id)
+                    response = await session.process_message(query)
+
+                    print(f"✅ Completed job check for {discord_username}")
+                    print(f"Response summary: {response[:200]}...")
+
+                    # Update monitor state for this user
+                    save_monitor_state(discord_user_id, [], datetime.now())
+
+                except Exception as user_error:
+                    print(f"❌ Error processing user {discord_username}: {user_error}")
+                    continue
+
+            print(f"\n✅ Auto job check completed for all users")
 
         except Exception as e:
             print(f"❌ Error in auto job check: {e}")
@@ -397,9 +433,33 @@ class JobbyBot(commands.Bot):
         if not content:
             return
 
+        user_id = message.author.id
+        username = str(message.author)
+
+        # Ensure user exists in database
+        get_or_create_user(user_id, username)
+
+        # Check if user has preferences set up
+        prefs = get_user_preferences(user_id)
+        resume = get_user_resume(user_id)
+
+        # Check if this is a setup response (user answering setup questions)
+        is_setup_response = await self._handle_setup_flow(message, user_id, prefs, resume, content)
+        if is_setup_response:
+            return
+
+        # Check if user has completed setup (both preferences AND resume required)
+        has_prefs = prefs and prefs.get('default_search', {}).get('search_term')
+        has_resume = resume is not None
+
+        # If missing preferences or resume, prompt user to set up
+        if not has_prefs or not has_resume:
+            await self._prompt_initial_setup(message, prefs, resume)
+            return
+
         async with message.channel.typing():
             try:
-                session = await self.get_or_create_session(message.author.id)
+                session = await self.get_or_create_session(user_id)
                 response = await session.process_message(content)
 
                 if len(response) <= 2000:
@@ -415,7 +475,141 @@ class JobbyBot(commands.Bot):
             except Exception as e:
                 error_msg = f"❌ Error processing request: {str(e)}"
                 await message.reply(error_msg)
-                print(f"Error in session {message.author.id}: {e}")
+                print(f"Error in session {user_id}: {e}")
+
+    async def _prompt_initial_setup(self, message: discord.Message, prefs: dict, resume: dict):
+        """Prompt user to set up their preferences."""
+        setup_msg = "👋 **Welcome to Jobby Bot!**\n\n"
+        setup_msg += "Before I can help you find jobs, I need some information:\n\n"
+
+        # Check what's missing
+        has_resume = resume is not None
+        has_prefs = prefs and prefs.get('default_search', {}).get('search_term')
+
+        if not has_resume:
+            setup_msg += "❌ **Step 1 - Resume**: Not uploaded yet\n"
+            setup_msg += "   → Use `/upload-resume` to upload your resume (PDF or TXT)\n\n"
+
+        if not has_prefs:
+            step_num = "2" if not has_resume else "1"
+            setup_msg += f"❌ **Step {step_num} - Job Preferences**: Not configured\n"
+            setup_msg += "   → Let's set them up now!\n\n"
+            setup_msg += "**Please tell me:**\n"
+            setup_msg += "1️⃣ What job title are you looking for? (e.g., Software Engineer, Data Analyst)\n"
+            setup_msg += "2️⃣ What location? (e.g., San Francisco, CA or 'remote')\n\n"
+            setup_msg += "💡 *Just reply with something like:*\n"
+            setup_msg += "`Software Engineer in San Francisco, remote preferred`\n\n"
+            setup_msg += "Or use `/set-preferences` for more detailed settings."
+        elif not has_resume:
+            # Has preferences but no resume
+            setup_msg += "✅ **Job Preferences**: Configured\n\n"
+            setup_msg += "⚠️ **Please upload your resume first** using `/upload-resume`\n"
+            setup_msg += "I need your resume to create customized applications for each job."
+
+        await message.reply(setup_msg)
+
+    async def _handle_setup_flow(self, message: discord.Message, user_id: int, prefs: dict, resume: dict, content: str) -> bool:
+        """Handle setup flow responses. Returns True if this was a setup response."""
+        # Only handle setup if user doesn't have preferences yet
+        if prefs and prefs.get('default_search', {}).get('search_term'):
+            return False
+
+        # Check if this looks like a setup response (job title + location pattern)
+        content_lower = content.lower()
+
+        # Skip if it looks like a regular command or question
+        skip_patterns = ['help', 'what can you', 'how do', '/']
+        if any(pattern in content_lower for pattern in skip_patterns):
+            return False
+
+        # Try to parse job preferences from natural language
+        parsed_prefs = self._parse_preferences_from_message(content)
+
+        if parsed_prefs.get('search_term'):
+            # Save the parsed preferences
+            new_prefs = prefs or {}
+            if 'default_search' not in new_prefs:
+                new_prefs['default_search'] = {}
+
+            new_prefs['default_search']['search_term'] = parsed_prefs['search_term']
+            if parsed_prefs.get('location'):
+                new_prefs['default_search']['location'] = parsed_prefs['location']
+            if parsed_prefs.get('is_remote') is not None:
+                new_prefs['default_search']['is_remote'] = parsed_prefs['is_remote']
+
+            # Set defaults
+            new_prefs['default_search'].setdefault('results_wanted', 20)
+            new_prefs['default_search'].setdefault('hours_old', 72)
+
+            save_user_preferences(user_id, new_prefs, str(message.author))
+
+            # Confirm and prompt for next steps
+            confirm_msg = "✅ **Preferences Saved!**\n\n"
+            confirm_msg += f"🔍 **Job Title**: {parsed_prefs['search_term']}\n"
+            if parsed_prefs.get('location'):
+                confirm_msg += f"📍 **Location**: {parsed_prefs['location']}\n"
+            if parsed_prefs.get('is_remote'):
+                confirm_msg += f"🏠 **Remote**: Yes\n"
+            confirm_msg += "\n"
+
+            if not resume:
+                confirm_msg += "📄 **Next step**: Upload your resume using `/upload-resume`\n"
+                confirm_msg += "This helps me create tailored resumes for each job.\n\n"
+
+            confirm_msg += "🚀 **Ready to search!** Just say something like:\n"
+            confirm_msg += "`Find me 10 jobs` or `Search for remote positions`"
+
+            await message.reply(confirm_msg)
+            return True
+
+        return False
+
+    def _parse_preferences_from_message(self, content: str) -> dict:
+        """Parse job preferences from natural language message."""
+        result = {
+            'search_term': None,
+            'location': None,
+            'is_remote': False
+        }
+
+        content_lower = content.lower()
+
+        # Check for remote preference
+        remote_keywords = ['remote', 'work from home', 'wfh', 'virtual']
+        result['is_remote'] = any(kw in content_lower for kw in remote_keywords)
+
+        # Common location prepositions
+        location_preps = [' in ', ' at ', ' near ', ' around ']
+
+        # Try to split by location preposition
+        for prep in location_preps:
+            if prep in content_lower:
+                parts = content.split(prep, 1)
+                if len(parts) == 2:
+                    result['search_term'] = parts[0].strip()
+                    # Clean up location (remove "remote" if present)
+                    location = parts[1].strip()
+                    for kw in remote_keywords:
+                        location = location.replace(kw, '').strip()
+                    # Remove trailing punctuation and common words
+                    location = location.rstrip('.,!?')
+                    location = location.replace(' preferred', '').replace(' only', '').strip()
+                    if location and location.lower() not in ['', 'remote']:
+                        result['location'] = location
+                    break
+
+        # If no location preposition found, treat whole thing as search term
+        if not result['search_term']:
+            # Remove remote keywords and clean up
+            clean_content = content
+            for kw in remote_keywords:
+                clean_content = clean_content.replace(kw, '').strip()
+            clean_content = clean_content.replace(' preferred', '').replace(' only', '').strip()
+            clean_content = clean_content.rstrip('.,!?')
+            if clean_content:
+                result['search_term'] = clean_content
+
+        return result
 
 
 # Import slash commands
@@ -425,7 +619,10 @@ from jobby_bot.discord_commands import (
     upload_resume_command,
     set_preferences_command,
     show_preferences_command,
-    show_resume_command
+    show_resume_command,
+    set_email_command,
+    enable_auto_monitor_command,
+    disable_auto_monitor_command,
 )
 
 
@@ -438,17 +635,21 @@ async def start_command(interaction: discord.Interaction):
         "🔍 Search for jobs across LinkedIn, Indeed, and Google\n"
         "📄 Generate customized ATS-optimized resumes\n"
         "✍️ Write personalized cover letters\n"
-        "📊 Track applications in Notion\n\n"
+        "📊 Track applications in Notion\n"
+        "📧 Automatic job alerts via email\n\n"
         "**How to use:**\n"
         "• Use `/` slash commands for setup and configuration\n"
         "• Send me a DM or mention me for job searches and requests\n\n"
-        "**Slash Commands:**\n"
-        "• `/start` - Show this message\n"
-        "• `/help` - Get detailed help\n"
+        "**Setup Commands:**\n"
         "• `/upload-resume` - Upload your resume (PDF/TXT)\n"
         "• `/set-preferences` - Update job search settings\n"
+        "• `/set-email` - Set your email for job alerts\n"
+        "• `/enable-auto-monitor` - Enable automatic job alerts\n"
+        "• `/disable-auto-monitor` - Disable automatic job alerts\n\n"
+        "**View Commands:**\n"
         "• `/show-resume` - View your current resume\n"
         "• `/show-preferences` - View your settings\n"
+        "• `/help` - Get detailed help\n"
         "• `/end` - End your current session\n\n"
         "Just mention me or DM me to start searching for jobs!",
         ephemeral=True
@@ -481,6 +682,9 @@ async def main():
     bot.tree.add_command(set_preferences_command)
     bot.tree.add_command(show_preferences_command)
     bot.tree.add_command(show_resume_command)
+    bot.tree.add_command(set_email_command)
+    bot.tree.add_command(enable_auto_monitor_command)
+    bot.tree.add_command(disable_auto_monitor_command)
 
     print("\n" + "="*60)
     print("🤖 JOBBY BOT - Discord Integration (Agno Framework)")

@@ -37,7 +37,8 @@ def search_jobs(
     results_wanted: int = 20,
     sites: list = None,
     job_type: str = None,
-    hours_old: int = 72
+    hours_old: int = 72,
+    output_dir: str = None
 ) -> str:
     """Search for jobs using JobSpy across multiple job sites.
 
@@ -49,6 +50,7 @@ def search_jobs(
         sites: List of sites to search (indeed, linkedin, google)
         job_type: Type of job (fulltime, parttime, internship, contract)
         hours_old: How recent jobs should be in hours (default 72)
+        output_dir: Directory to save job listings (optional, uses user's output dir from context)
 
     Returns:
         JSON string with job listings
@@ -76,10 +78,14 @@ def search_jobs(
         if jobs_df.empty:
             return json.dumps({"success": True, "total_jobs_found": 0, "jobs": []})
 
-        # Save to CSV
+        # Save to CSV - use provided output_dir or default
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv_path = f"output/job_listings/jobs_{timestamp}.csv"
-        os.makedirs("output/job_listings", exist_ok=True)
+        if output_dir:
+            csv_dir = f"{output_dir}/job_listings"
+        else:
+            csv_dir = "output/job_listings"
+        csv_path = f"{csv_dir}/jobs_{timestamp}.csv"
+        os.makedirs(csv_dir, exist_ok=True)
         jobs_df.to_csv(csv_path, index=False)
 
         # Convert to list of dicts

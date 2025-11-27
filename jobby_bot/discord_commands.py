@@ -8,8 +8,17 @@ from typing import Optional
 import discord
 from discord import app_commands
 
-# Paths
-USER_DATA_DIR = Path(__file__).parent / "user_data"
+from jobby_bot.database import (
+    get_or_create_user,
+    get_user_resume,
+    save_user_resume,
+    get_user_preferences,
+    save_user_preferences,
+    get_user_email,
+    set_user_email,
+    is_auto_monitor_enabled,
+    set_auto_monitor_enabled,
+)
 
 
 @app_commands.command(name="help", description="Show detailed help information")
@@ -30,6 +39,9 @@ async def help_command(interaction: discord.Interaction):
 • `/set-preferences` - Update job search settings
 • `/show-resume` - View your current resume summary
 • `/show-preferences` - View your current settings
+• `/set-email` - Set your email for job notifications
+• `/enable-auto-monitor` - Enable automatic job monitoring
+• `/disable-auto-monitor` - Disable automatic job monitoring
 
 **Example preference updates:**
 Use `/set-preferences` and provide settings like:
@@ -52,6 +64,7 @@ Just message or mention the bot:
 **Tips:**
 • Upload your resume first using `/upload-resume`
 • Configure preferences with `/set-preferences`
+• Set your email with `/set-email` to receive job alerts
 • Be specific about job criteria (location, role, experience level)
 • Sessions persist until you use `/end`
 """
@@ -66,14 +79,13 @@ async def end_command(interaction: discord.Interaction):
 
     if user_id in bot.sessions:
         session = bot.sessions[user_id]
-        session_dir = session.session_dir
+        session_dir = getattr(session, 'session_dir', None)
         await session.cleanup()
         del bot.sessions[user_id]
-        await interaction.response.send_message(
-            f"👋 **Session Ended!**\n"
-            f"📁 Your session logs: `{session_dir}`",
-            ephemeral=True
-        )
+        msg = "👋 **Session Ended!**\n"
+        if session_dir:
+            msg += f"📁 Your session logs: `{session_dir}`"
+        await interaction.response.send_message(msg, ephemeral=True)
     else:
         await interaction.response.send_message(
             "⚠️ No active session found. Use `/start` to begin!",
@@ -115,21 +127,36 @@ async def upload_resume_command(
         bot = interaction.client
         session = await bot.get_or_create_session(interaction.user.id)
 
+        # Ensure user exists in DB
+        get_or_create_user(interaction.user.id, str(interaction.user))
+
         # If PDF, use the conversion script; if TXT, process directly
+        # The agent will parse and we'll intercept the save to store in DB
         if file.filename.endswith('.pdf'):
-            message = f"I've received a PDF resume. Please extract the text and convert it to JSON Resume format, saving it to user_data/base_resume.json. The PDF is at: {tmp_path}"
+            message = f"I've received a PDF resume. Please extract the text and convert it to JSON Resume format. Return the JSON object. The PDF is at: {tmp_path}"
         else:
-            message = f"I've received a text resume. Please parse it and convert it to JSON Resume format, saving it to user_data/base_resume.json. The text file is at: {tmp_path}"
+            message = f"I've received a text resume. Please parse it and convert it to JSON Resume format. Return the JSON object. The text file is at: {tmp_path}"
 
         # Process through config agent
         response = await session.process_message(message)
+
+        # Try to extract JSON from response and save to DB
+        try:
+            # Look for JSON in response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response)
+            if json_match:
+                resume_dict = json.loads(json_match.group())
+                save_user_resume(interaction.user.id, resume_dict, str(interaction.user))
+        except (json.JSONDecodeError, AttributeError):
+            pass  # If we can't parse JSON, agent may have saved to file
 
         # Clean up temp file
         os.unlink(tmp_path)
 
         await interaction.followup.send(
             f"✅ **Resume Uploaded Successfully!**\n\n"
-            f"{response}\n\n"
+            f"{response[:1500]}\n\n"
             f"Your resume has been saved and will be used for all job applications.\n"
             f"Use `/show-resume` to view it.",
             ephemeral=True
@@ -156,11 +183,27 @@ async def set_preferences_command(
         bot = interaction.client
         session = await bot.get_or_create_session(interaction.user.id)
 
-        message = f"Update my job search preferences: {setting}"
+        # Ensure user exists
+        get_or_create_user(interaction.user.id, str(interaction.user))
+
+        # Get current preferences from DB or start fresh
+        current_prefs = get_user_preferences(interaction.user.id) or {}
+
+        message = f"Update my job search preferences: {setting}. Current preferences: {json.dumps(current_prefs)}"
         response = await session.process_message(message)
 
+        # Try to extract updated preferences from response
+        try:
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response)
+            if json_match:
+                updated_prefs = json.loads(json_match.group())
+                save_user_preferences(interaction.user.id, updated_prefs, str(interaction.user))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
         await interaction.followup.send(
-            f"✅ **Preferences Updated!**\n\n{response}",
+            f"✅ **Preferences Updated!**\n\n{response[:1500]}",
             ephemeral=True
         )
 
@@ -175,22 +218,30 @@ async def set_preferences_command(
 async def show_preferences_command(interaction: discord.Interaction):
     """View current job search preferences."""
     try:
-        prefs_file = USER_DATA_DIR / "preferences.json"
-        if not prefs_file.exists():
+        prefs = get_user_preferences(interaction.user.id)
+
+        if not prefs:
             await interaction.response.send_message(
-                "⚠️ No preferences file found. Use `/set-preferences` to configure.",
+                "⚠️ No preferences found. Use `/set-preferences` to configure.",
                 ephemeral=True
             )
             return
-
-        with open(prefs_file, 'r') as f:
-            prefs = json.load(f)
 
         default_search = prefs.get('default_search', {})
         filters = prefs.get('filters', {})
         blacklist = prefs.get('blacklist', {})
 
+        # Get email and auto-monitor status
+        email = get_user_email(interaction.user.id)
+        auto_monitor = is_auto_monitor_enabled(interaction.user.id)
+
         response = "⚙️ **Current Preferences**\n\n"
+
+        # Account settings
+        response += "**Account Settings:**\n"
+        response += f"• Email: `{email or 'Not set'}`\n"
+        response += f"• Auto Monitor: `{'Enabled' if auto_monitor else 'Disabled'}`\n\n"
+
         response += "**Search Settings:**\n"
         response += f"• Job Title: `{default_search.get('search_term', 'Not set')}`\n"
         response += f"• Location: `{default_search.get('location', 'Not set')}`\n"
@@ -229,18 +280,15 @@ async def show_preferences_command(interaction: discord.Interaction):
 async def show_resume_command(interaction: discord.Interaction):
     """View your current base resume summary."""
     try:
-        resume_file = USER_DATA_DIR / "base_resume.json"
-        if not resume_file.exists():
+        resume = get_user_resume(interaction.user.id)
+
+        if not resume:
             await interaction.response.send_message(
                 "⚠️ **No Resume Found**\n\n"
-                "Upload your resume using `/upload-resume`\n"
-                "Or manually create `user_data/base_resume.json`",
+                "Upload your resume using `/upload-resume`",
                 ephemeral=True
             )
             return
-
-        with open(resume_file, 'r') as f:
-            resume = json.load(f)
 
         basics = resume.get('basics', {})
         work = resume.get('work', [])
@@ -258,7 +306,7 @@ async def show_resume_command(interaction: discord.Interaction):
 
         response += f"\n**Work Experience:** {len(work)} position(s)\n"
         for i, job in enumerate(work[:3], 1):
-            response += f"{i}. {job.get('position', 'Unknown')} at {job.get('company', 'Unknown')}\n"
+            response += f"{i}. {job.get('position', 'Unknown')} at {job.get('company', job.get('name', 'Unknown'))}\n"
         if len(work) > 3:
             response += f"   ... and {len(work) - 3} more\n"
 
@@ -279,5 +327,103 @@ async def show_resume_command(interaction: discord.Interaction):
     except Exception as e:
         await interaction.response.send_message(
             f"❌ Error reading resume: {str(e)}",
+            ephemeral=True
+        )
+
+
+@app_commands.command(name="set-email", description="Set your email for job notifications")
+async def set_email_command(
+    interaction: discord.Interaction,
+    email: str
+):
+    """Set the user's email for job notifications."""
+    # Basic email validation
+    import re
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        await interaction.response.send_message(
+            "❌ Invalid email format. Please provide a valid email address.",
+            ephemeral=True
+        )
+        return
+
+    try:
+        get_or_create_user(interaction.user.id, str(interaction.user))
+        set_user_email(interaction.user.id, email, str(interaction.user))
+
+        await interaction.response.send_message(
+            f"✅ **Email Set!**\n\n"
+            f"Your email has been set to: `{email}`\n\n"
+            f"You will receive job notifications at this address when auto-monitor is enabled.\n"
+            f"Use `/enable-auto-monitor` to start receiving automatic job alerts.",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Error setting email: {str(e)}",
+            ephemeral=True
+        )
+
+
+@app_commands.command(name="enable-auto-monitor", description="Enable automatic job monitoring")
+async def enable_auto_monitor_command(interaction: discord.Interaction):
+    """Enable automatic job monitoring for the user."""
+    try:
+        # Check if user has email set
+        email = get_user_email(interaction.user.id)
+        if not email:
+            await interaction.response.send_message(
+                "⚠️ **Email Required**\n\n"
+                "You need to set your email first using `/set-email` before enabling auto-monitor.",
+                ephemeral=True
+            )
+            return
+
+        # Check if user has preferences set
+        prefs = get_user_preferences(interaction.user.id)
+        if not prefs or not prefs.get('default_search', {}).get('search_term'):
+            await interaction.response.send_message(
+                "⚠️ **Preferences Required**\n\n"
+                "You need to set your job search preferences using `/set-preferences` before enabling auto-monitor.\n"
+                "At minimum, set a `search_term` like: `/set-preferences search_term: Software Engineer`",
+                ephemeral=True
+            )
+            return
+
+        get_or_create_user(interaction.user.id, str(interaction.user))
+        set_auto_monitor_enabled(interaction.user.id, True, str(interaction.user))
+
+        await interaction.response.send_message(
+            f"✅ **Auto-Monitor Enabled!**\n\n"
+            f"You will now receive automatic job alerts at: `{email}`\n\n"
+            f"The bot will search for jobs matching your preferences and send you notifications.\n"
+            f"Use `/disable-auto-monitor` to stop receiving alerts.",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Error enabling auto-monitor: {str(e)}",
+            ephemeral=True
+        )
+
+
+@app_commands.command(name="disable-auto-monitor", description="Disable automatic job monitoring")
+async def disable_auto_monitor_command(interaction: discord.Interaction):
+    """Disable automatic job monitoring for the user."""
+    try:
+        get_or_create_user(interaction.user.id, str(interaction.user))
+        set_auto_monitor_enabled(interaction.user.id, False, str(interaction.user))
+
+        await interaction.response.send_message(
+            "✅ **Auto-Monitor Disabled!**\n\n"
+            "You will no longer receive automatic job alerts.\n"
+            "Use `/enable-auto-monitor` to re-enable.",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Error disabling auto-monitor: {str(e)}",
             ephemeral=True
         )
