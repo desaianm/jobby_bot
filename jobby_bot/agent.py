@@ -38,6 +38,11 @@ def search_jobs(
     sites: list = None,
     job_type: str = None,
     hours_old: int = 72,
+    distance: int = 50,
+    easy_apply: bool = False,
+    country_indeed: str = "USA",
+    linkedin_fetch_description: bool = False,
+    enforce_annual_salary: bool = False,
     output_dir: str = None
 ) -> str:
     """Search for jobs using JobSpy across multiple job sites.
@@ -46,14 +51,19 @@ def search_jobs(
         search_term: Job title or keywords to search for
         location: Location to search in (optional)
         is_remote: Filter for remote jobs only
-        results_wanted: Number of results to return (default 20)
-        sites: List of sites to search (indeed, linkedin, google)
-        job_type: Type of job (fulltime, parttime, internship, contract)
+        results_wanted: Number of results to return per site (default 20)
+        sites: List of sites to search. Options: linkedin, indeed, glassdoor, google, zip_recruiter, bayt, naukri. Default: all major sites
+        job_type: Type of job - fulltime, parttime, internship, contract (optional)
         hours_old: How recent jobs should be in hours (default 72)
+        distance: Search radius in miles from location (default 50)
+        easy_apply: Filter for jobs with easy apply option (default False)
+        country_indeed: Country for Indeed/Glassdoor search - USA, UK, Canada, etc (default USA)
+        linkedin_fetch_description: Fetch full LinkedIn descriptions - slower but more detail (default False)
+        enforce_annual_salary: Convert all salaries to annual format (default False)
         output_dir: Directory to save job listings (optional, uses user's output dir from context)
 
     Returns:
-        JSON string with job listings
+        JSON string with job listings including title, company, location, url, salary, and more
     """
     import json
     from datetime import datetime
@@ -61,22 +71,44 @@ def search_jobs(
         from jobspy import scrape_jobs
         import pandas as pd
 
+        # Default to all major job sites if none specified
         if sites is None:
-            sites = ["indeed", "linkedin", "google"]
+            sites = ["linkedin", "indeed", "glassdoor", "google", "zip_recruiter"]
+
+        # Build scrape parameters
+        scrape_params = {
+            "site_name": sites,
+            "search_term": search_term,
+            "results_wanted": results_wanted,
+            "hours_old": hours_old,
+            "distance": distance,
+            "country_indeed": country_indeed,
+        }
+
+        # Add optional parameters only if set
+        if location:
+            scrape_params["location"] = location
+        if is_remote:
+            scrape_params["is_remote"] = is_remote
+        if job_type:
+            scrape_params["job_type"] = job_type
+        if easy_apply:
+            scrape_params["easy_apply"] = easy_apply
+        if linkedin_fetch_description:
+            scrape_params["linkedin_fetch_description"] = linkedin_fetch_description
+        if enforce_annual_salary:
+            scrape_params["enforce_annual_salary"] = enforce_annual_salary
 
         # Scrape jobs
-        jobs_df = scrape_jobs(
-            site_name=sites,
-            search_term=search_term,
-            location=location,
-            is_remote=is_remote,
-            results_wanted=results_wanted,
-            job_type=job_type,
-            hours_old=hours_old,
-        )
+        jobs_df = scrape_jobs(**scrape_params)
 
         if jobs_df.empty:
-            return json.dumps({"success": True, "total_jobs_found": 0, "jobs": []})
+            return json.dumps({
+                "success": True,
+                "total_jobs_found": 0,
+                "sites_searched": sites,
+                "jobs": []
+            })
 
         # Save to CSV - use provided output_dir or default
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -88,29 +120,58 @@ def search_jobs(
         os.makedirs(csv_dir, exist_ok=True)
         jobs_df.to_csv(csv_path, index=False)
 
-        # Convert to list of dicts
+        # Convert to list of dicts with more details
         jobs_list = []
         for idx, row in jobs_df.iterrows():
-            jobs_list.append({
+            job_entry = {
                 "job_id": f"job_{idx}",
                 "title": str(row.get("title", "")),
                 "company": str(row.get("company", "")),
                 "location": str(row.get("location", "")),
                 "job_url": str(row.get("job_url", "")),
+                "site": str(row.get("site", "")),
                 "date_posted": str(row.get("date_posted", "")),
-                "description_preview": str(row.get("description", ""))[:200],
+                "description_preview": str(row.get("description", ""))[:300],
                 "is_remote": bool(row.get("is_remote", False)),
-                "salary": str(row.get("min_amount", "")) + " - " + str(row.get("max_amount", "")) if row.get("min_amount") else ""
-            })
+            }
+
+            # Add salary info if available
+            min_salary = row.get("min_amount")
+            max_salary = row.get("max_amount")
+            if min_salary or max_salary:
+                salary_parts = []
+                if min_salary:
+                    salary_parts.append(f"${min_salary:,.0f}" if isinstance(min_salary, (int, float)) else str(min_salary))
+                if max_salary:
+                    salary_parts.append(f"${max_salary:,.0f}" if isinstance(max_salary, (int, float)) else str(max_salary))
+                job_entry["salary"] = " - ".join(salary_parts)
+                job_entry["salary_interval"] = str(row.get("interval", ""))
+            else:
+                job_entry["salary"] = ""
+
+            # Add company info if available
+            if row.get("company_url"):
+                job_entry["company_url"] = str(row.get("company_url"))
+            if row.get("job_type"):
+                job_entry["job_type"] = str(row.get("job_type"))
+
+            jobs_list.append(job_entry)
 
         return json.dumps({
             "success": True,
             "total_jobs_found": len(jobs_list),
+            "sites_searched": sites,
             "csv_file": csv_path,
             "jobs": jobs_list
         })
     except Exception as e:
-        return json.dumps({"success": False, "error": str(e), "total_jobs_found": 0, "jobs": []})
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "total_jobs_found": 0,
+            "sites_searched": sites if sites else [],
+            "jobs": []
+        })
 
 
 @tool
