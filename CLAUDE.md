@@ -84,19 +84,21 @@ logs/
 ### Job Finder Agent
 - **Model**: claude-haiku-4-5-20250514
 - **Tools**: `search_jobs`, `read_file`, `write_file` (custom @tool functions)
-- **Role**: Scrape jobs via JobSpy (LinkedIn, Indeed, Google)
-- **Output**: `output/job_listings/jobs_TIMESTAMP.csv`
+- **Role**: Scrape jobs via JobSpy (LinkedIn, Indeed, Google, Glassdoor, ZipRecruiter)
+- **Output**: `output/{user_id}/job_listings/jobs_TIMESTAMP.csv`
 
 ### Resume Writer Agent
 - **Model**: claude-haiku-4-5-20250514
 - **Tools**: `read_file`, `write_file`, `generate_pdf`
-- **Input**: `user_data/base_resume.json` (JSON Resume format)
-- **Output**: `output/resumes/job_N_resume.{pdf,md,txt}` - ATS optimization
+- **Input**: Resume JSON from `<base_resume_json>` context tag (injected from database)
+- **Output**: `output/{user_id}/resumes/job_N_resume.{pdf,md,txt}` - ATS optimization
+- **Grounding**: REWORDING only - never fabricates experience/certifications
 
 ### Cover Letter Agent
 - **Model**: claude-haiku-4-5-20250514
 - **Tools**: `read_file`, `write_file`, `generate_pdf`
-- **Output**: `output/cover_letters/job_N_cover_letter.{pdf,txt}`
+- **Input**: Resume JSON from `<base_resume_json>` context tag (injected from database)
+- **Output**: `output/{user_id}/cover_letters/job_N_cover_letter.{pdf,txt}`
 
 ### Email Agent
 - **Model**: claude-haiku-4-5-20250514
@@ -256,6 +258,17 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 - Check agent has Write permission
 - Verify file paths in agent prompt
 
+**Resume data not found / wrong resume used**
+- Resume data is injected via `<base_resume_json>` context tag from database
+- Agents should NOT read from `user_data/base_resume.json` file
+- Check `_load_user_context()` in discord_bot.py includes resume JSON
+- User must `/upload-resume` first to populate database
+
+**PDF upload fails to extract text**
+- Ensure pdfplumber is installed: `pip install pdfplumber`
+- Check PDF is text-based (not scanned image)
+- Use `/upload-resume` with .txt file as fallback
+
 ## Key Dependencies
 
 ### Core
@@ -270,7 +283,7 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 - `notion-client ^2.2.1` - Notion database integration
 
 ### Utilities
-- `pydantic ^2.0.0`, `python-dotenv ^1.0.0`, `pandas ^2.0.0`
+- `pydantic ^2.0.0`, `python-dotenv ^1.0.0`, `pandas ^2.0.0`, `pdfplumber ^0.11.0`
 
 ## Best Practices
 
@@ -304,10 +317,10 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 ## Future Enhancements
 
 Potential areas for expansion:
-- Additional job sites (ZipRecruiter, Glassdoor)
 - Interview prep agent
 - Application status monitoring
 - Automated follow-up scheduling
+- OAuth2 email authentication
 
 ## Resources
 

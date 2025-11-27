@@ -9,8 +9,8 @@ This document details all features implemented in Jobby Bot, including setup ins
 ### 1. Job Search & Filtering
 
 **Capability**: Automated job scraping from multiple platforms
-- **Sources**: LinkedIn, Indeed, Google Jobs
-- **Filters**: Location, distance, remote, salary, job type
+- **Sources**: LinkedIn, Indeed, Google Jobs, Glassdoor, ZipRecruiter
+- **Filters**: Location, distance, remote, salary, job type, easy_apply, country
 - **Deduplication**: Removes duplicate listings automatically
 - **Blacklisting**: Filter out unwanted companies/keywords
 
@@ -23,9 +23,9 @@ Find 20 remote AI Engineer jobs in Toronto
 
 **Capability**: ATS-optimized resume customization for each job
 - **Formats**: PDF (ATS-friendly), Markdown, Plain text
-- **Optimization**: Keyword extraction from job descriptions
-- **Customization**: Tailored content for each position
-- **Base Data**: Uses `user_data/base_resume.json` (JSON Resume format)
+- **Optimization**: Keyword rewording from job descriptions (grounded in actual experience)
+- **Strict Grounding**: Only rewords existing content - NEVER fabricates experience/certifications
+- **Base Data**: Uses resume from SQLite database (uploaded via `/upload-resume`)
 
 **Files Generated**:
 - `output/resumes/{job_id}_resume.pdf`
@@ -118,33 +118,20 @@ NOTION_DATABASE_ID=xxx
 
 ### 6. Configuration Management
 
-**Capability**: Update preferences and resume through conversation
+**Capability**: Update preferences and resume through Discord slash commands
 
-**Update Preferences**:
-```
-"Update my location to Seattle"
-"Set distance to 100 miles"
-"Add Google to blacklisted companies"
-"Change search term to Data Scientist"
-"Set remote to true"
-"Find 30 jobs instead of 20"
-```
+**Discord Slash Commands**:
+| Command | Description |
+|---------|-------------|
+| `/upload-resume` | Upload resume (PDF/TXT) - extracts text automatically |
+| `/set-preferences` | Update job search settings |
+| `/show-resume` | View current resume summary |
+| `/show-preferences` | View settings and account info |
+| `/set-email` | Set email for job notifications |
+| `/enable-auto-monitor` | Enable automatic job alerts (default: every 30 min) |
+| `/disable-auto-monitor` | Disable automatic job alerts |
 
-**Update Resume**:
-```
-"Update my current job title to Senior AI Engineer"
-"Add LangChain to my skills"
-```
-
-**View Configuration**:
-```
-"Show my preferences"
-"What's my current location?"
-```
-
-**Files Managed**:
-- `user_data/preferences.json` - Search settings, filters, blacklist
-- `user_data/base_resume.json` - Resume data (JSON Resume format)
+**Data Storage**: All user data stored in SQLite database per Discord user ID
 
 ### 7. PDF Resume Conversion
 
@@ -200,23 +187,22 @@ User: Now find 15 Data Scientist jobs
 Bot:  [Uses new preferences for search]
 ```
 
-## Output Files Structure
+## Output Files Structure (Per-User)
 
 ```
 output/
-├── job_listings/
-│   └── jobs_20250121_143022.csv          # Raw job search results
-├── resumes/
-│   ├── job_1_resume.pdf                  # ATS-friendly PDF
-│   ├── job_1_resume.md                   # Formatted markdown
-│   ├── job_1_resume.txt                  # Plain text
-│   ├── job_2_resume.pdf
-│   └── ...
-└── cover_letters/
-    ├── job_1_cover_letter.pdf            # Professional PDF
-    ├── job_1_cover_letter.txt            # Plain text
-    ├── job_2_cover_letter.pdf
-    └── ...
+├── {discord_user_id}/                    # Per-user output folders
+│   ├── job_listings/
+│   │   └── jobs_20250121_143022.csv      # Raw job search results
+│   ├── resumes/
+│   │   ├── job_1_resume.pdf              # ATS-friendly PDF
+│   │   ├── job_1_resume.md               # Formatted markdown
+│   │   ├── job_1_resume.txt              # Plain text
+│   │   └── ...
+│   └── cover_letters/
+│       ├── job_1_cover_letter.pdf        # Professional PDF
+│       ├── job_1_cover_letter.txt        # Plain text
+│       └── ...
 ```
 
 ## Session Logs
@@ -294,7 +280,7 @@ All features are enabled by default if configured. The bot automatically:
 ## Future Enhancements
 
 Potential additions:
-- Additional job sites (ZipRecruiter, Glassdoor)
 - Interview prep agent
 - Application status monitoring
 - Automated follow-up scheduling
+- OAuth2 email authentication

@@ -1,6 +1,43 @@
-# Session Summary - January 21, 2025
+# Session Summary - Latest Updates
 
-## Features Implemented
+## Session: Multi-User Database & Agent Grounding (November 2025)
+
+### 1. SQLite Multi-User Database Support
+- **What**: Converted single-user file storage to multi-user SQLite database
+- **Implementation**:
+  - Created `jobby_bot/database.py` with CRUD functions for users, resumes, preferences
+  - Tables: `users`, `resumes`, `preferences`, `monitor_state`
+  - All data stored per Discord user ID
+- **Key Functions**: `get_or_create_user()`, `get_user_resume()`, `save_user_resume()`, `get_user_preferences()`, `save_user_preferences()`, `get_user_email()`, `set_user_email()`, `is_auto_monitor_enabled()`, `set_auto_monitor_enabled()`
+
+### 2. New Discord Slash Commands
+- `/set-email` - Set email address for job notifications
+- `/enable-auto-monitor` - Opt-in to automatic job alerts (default: 30 min interval)
+- `/disable-auto-monitor` - Opt-out of automatic job alerts
+
+### 3. Resume Writer Strict Grounding
+- **What**: Completely rewrote resume writer prompt to prevent fabrication
+- **Rules**: Agent is now a "REWORDING agent" - only changes words, not facts
+- **Never Adds**: Fake job titles, companies, certifications, skills, or inflated experience
+- **Only Changes**: Word choice (synonyms), bullet order, phrasing with job keywords
+
+### 4. Context Injection for Agent Prompts
+- **What**: Resume data now passed via context tags instead of file reading
+- **Implementation**: `_load_user_context()` in discord_bot.py includes full resume JSON in `<base_resume_json>` tag
+- **Updated Prompts**: resume_writer.txt, cover_letter.txt, lead_agent.txt all use context data
+
+### 5. PDF Resume Upload Text Extraction
+- **What**: Fixed PDF upload to properly extract text using pdfplumber
+- **Implementation**: Added `extract_text_from_pdf()` function in discord_commands.py
+
+### 6. JobSpy Expanded Platform Support
+- **What**: Updated search_jobs tool with all JobSpy platforms
+- **Platforms**: linkedin, indeed, glassdoor, google, zip_recruiter
+- **New Filters**: distance, easy_apply, country_indeed, linkedin_fetch_description, enforce_annual_salary
+
+---
+
+## Session: January 21, 2025 (Previous)
 
 ### 1. PDF Resume and Cover Letter Generation
 - **What**: Added ATS-friendly PDF generation for all resumes and cover letters
@@ -38,9 +75,6 @@
   - Update resume data (job titles, skills, experience)
   - View current configuration
   - Validates all changes before saving
-- **Files Managed**:
-  - `user_data/preferences.json`
-  - `user_data/base_resume.json`
 
 ## Files Created
 
