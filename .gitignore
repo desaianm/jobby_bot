@@ -2,7 +2,7 @@
 .env
 *.env
 !.env.example
-
+data/
 user_data/
 # Python
 __pycache__/
