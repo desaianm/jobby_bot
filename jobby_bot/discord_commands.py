@@ -93,6 +93,23 @@ async def end_command(interaction: discord.Interaction):
         )
 
 
+def extract_text_from_pdf(pdf_path: str) -> str:
+    """Extract text from a PDF file using pdfplumber."""
+    try:
+        import pdfplumber
+
+        text_parts = []
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+
+        return "\n\n".join(text_parts)
+    except Exception as e:
+        raise Exception(f"Failed to extract text from PDF: {str(e)}")
+
+
 @app_commands.command(name="upload-resume", description="Upload your resume file (PDF or TXT)")
 async def upload_resume_command(
     interaction: discord.Interaction,
@@ -117,57 +134,117 @@ async def upload_resume_command(
 
     await interaction.response.defer(ephemeral=True)
 
+    tmp_path = None
     try:
         # Download attachment to temp location
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
             await file.save(tmp.name)
             tmp_path = tmp.name
 
-        # Get session and process
-        bot = interaction.client
-        session = await bot.get_or_create_session(interaction.user.id)
+        # Extract text from file
+        if file.filename.endswith('.pdf'):
+            resume_text = extract_text_from_pdf(tmp_path)
+        else:
+            with open(tmp_path, 'r', encoding='utf-8') as f:
+                resume_text = f.read()
+
+        if not resume_text or len(resume_text.strip()) < 50:
+            await interaction.followup.send(
+                "❌ Could not extract enough text from the file. Please ensure your resume has readable text content.",
+                ephemeral=True
+            )
+            return
 
         # Ensure user exists in DB
         get_or_create_user(interaction.user.id, str(interaction.user))
 
-        # If PDF, use the conversion script; if TXT, process directly
-        # The agent will parse and we'll intercept the save to store in DB
-        if file.filename.endswith('.pdf'):
-            message = f"I've received a PDF resume. Please extract the text and convert it to JSON Resume format. Return the JSON object. The PDF is at: {tmp_path}"
-        else:
-            message = f"I've received a text resume. Please parse it and convert it to JSON Resume format. Return the JSON object. The text file is at: {tmp_path}"
+        # Get session and process - send the extracted text to the agent
+        bot = interaction.client
+        session = await bot.get_or_create_session(interaction.user.id)
 
-        # Process through config agent
+        message = f"""I've extracted the following text from a resume. Please convert it to JSON Resume format (https://jsonresume.org/schema/).
+
+Return ONLY the JSON object, no other text. The JSON should have these sections:
+- basics (name, email, phone, location, summary)
+- work (array of positions)
+- education (array of degrees)
+- skills (array of skill groups with keywords)
+
+Here is the resume text:
+
+---
+{resume_text}
+---
+
+Return the JSON Resume object:"""
+
+        # Process through agent
         response = await session.process_message(message)
 
         # Try to extract JSON from response and save to DB
+        resume_saved = False
         try:
-            # Look for JSON in response
             import re
+            # Look for JSON object in response
             json_match = re.search(r'\{[\s\S]*\}', response)
             if json_match:
                 resume_dict = json.loads(json_match.group())
-                save_user_resume(interaction.user.id, resume_dict, str(interaction.user))
-        except (json.JSONDecodeError, AttributeError):
-            pass  # If we can't parse JSON, agent may have saved to file
+                # Validate it has at least basics
+                if 'basics' in resume_dict:
+                    save_user_resume(interaction.user.id, resume_dict, str(interaction.user))
+                    resume_saved = True
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"Error parsing JSON from response: {e}")
 
         # Clean up temp file
-        os.unlink(tmp_path)
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+            tmp_path = None
 
-        await interaction.followup.send(
-            f"✅ **Resume Uploaded Successfully!**\n\n"
-            f"{response[:1500]}\n\n"
-            f"Your resume has been saved and will be used for all job applications.\n"
-            f"Use `/show-resume` to view it.",
-            ephemeral=True
-        )
+        if resume_saved:
+            # Get the saved resume to show summary
+            saved_resume = get_user_resume(interaction.user.id)
+            basics = saved_resume.get('basics', {}) if saved_resume else {}
+
+            summary_msg = "✅ **Resume Uploaded Successfully!**\n\n"
+            summary_msg += f"**Name**: {basics.get('name', 'Not found')}\n"
+            summary_msg += f"**Email**: {basics.get('email', 'Not found')}\n"
+
+            work = saved_resume.get('work', []) if saved_resume else []
+            if work:
+                summary_msg += f"**Experience**: {len(work)} position(s)\n"
+
+            skills = saved_resume.get('skills', []) if saved_resume else []
+            if skills:
+                all_skills = []
+                for sg in skills:
+                    all_skills.extend(sg.get('keywords', []))
+                if all_skills:
+                    summary_msg += f"**Skills**: {', '.join(all_skills[:10])}"
+                    if len(all_skills) > 10:
+                        summary_msg += f" + {len(all_skills) - 10} more"
+                    summary_msg += "\n"
+
+            summary_msg += "\nYour resume has been saved and will be used for all job applications.\n"
+            summary_msg += "Use `/show-resume` to view the full details."
+
+            await interaction.followup.send(summary_msg, ephemeral=True)
+        else:
+            await interaction.followup.send(
+                "⚠️ **Resume Uploaded but Parsing Issue**\n\n"
+                f"I extracted the text but had trouble converting it to structured format.\n\n"
+                f"**Extracted text preview**:\n```\n{resume_text[:500]}...\n```\n\n"
+                "Please try again or use `/set-preferences` to manually set your details.",
+                ephemeral=True
+            )
 
     except Exception as e:
         await interaction.followup.send(
             f"❌ Error processing resume: {str(e)}",
             ephemeral=True
         )
-        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 
