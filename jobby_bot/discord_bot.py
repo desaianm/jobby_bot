@@ -174,18 +174,25 @@ Results Wanted: {default_search.get('results_wanted', 20)}
             if debug_mode:
                 print(f"DEBUG: No preferences found for user {self.user_id}")
 
-        # Load resume from database
+        # Load resume from database and include FULL JSON for agents to use
         resume = get_user_resume(self.user_id)
         if debug_mode:
             print(f"DEBUG: Loading resume for user {self.user_id}")
             print(f"DEBUG: Resume found: {resume is not None}")
 
         if resume:
+            import json
             basics = resume.get('basics', {})
+            # Include the FULL resume JSON so agents can use it directly
             context_parts.append(f"""<user_resume>
 Name: {basics.get('name', 'not set')}
 Email: {basics.get('email', 'not set')}
-Resume: loaded from database
+
+IMPORTANT: Use the resume data below. Do NOT read from user_data/base_resume.json file.
+
+<base_resume_json>
+{json.dumps(resume, indent=2)}
+</base_resume_json>
 </user_resume>""")
         else:
             if debug_mode:
