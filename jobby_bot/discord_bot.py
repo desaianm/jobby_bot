@@ -3,7 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import json
 from datetime import datetime
 from dotenv import load_dotenv
@@ -258,6 +258,13 @@ Job Listings: {user_output_dir}/job_listings/
         lines.append("</recently_created_files>")
         return "\n".join(lines)
 
+    def seed_conversation_history(self, history_entries):
+        """Replace in-memory conversation history with recent channel messages."""
+        if not history_entries:
+            return
+        # Store only the most recent entries to cap context size
+        self.conversation_history = history_entries[-10:]
+
     async def process_message(self, message: str) -> str:
         """Process a user message and return the agent's response."""
         if self.is_processing:
@@ -490,6 +497,9 @@ class JobbyBot(commands.Bot):
         async with message.channel.typing():
             try:
                 session = await self.get_or_create_session(user_id)
+                recent_history = await self._build_recent_channel_history(message)
+                if recent_history:
+                    session.seed_conversation_history(recent_history)
                 response = await session.process_message(content)
 
                 if len(response) <= 2000:
@@ -537,6 +547,44 @@ class JobbyBot(commands.Bot):
             setup_msg += "I need your resume to create customized applications for each job."
 
         await message.reply(setup_msg)
+
+    async def _build_recent_channel_history(self, message: discord.Message, limit: int = 5) -> List[Dict[str, str]]:
+        """Fetch the previous messages in the channel to provide context."""
+        history_entries: List[Dict[str, str]] = []
+
+        try:
+            async for msg in message.channel.history(limit=limit, before=message, oldest_first=False):
+                entry = self._format_history_entry(msg)
+                if entry:
+                    history_entries.append(entry)
+        except (discord.Forbidden, discord.HTTPException) as history_error:
+            print(f"⚠️ Unable to fetch channel history for {message.channel}: {history_error}")
+            return []
+
+        history_entries.reverse()  # Oldest first for natural reading order
+        return history_entries
+
+    def _format_history_entry(self, msg: discord.Message) -> Optional[Dict[str, str]]:
+        """Convert a Discord message into a conversation history entry."""
+        content = (msg.clean_content or msg.content or "").strip()
+
+        if msg.attachments:
+            attachments_text = ", ".join(att.url for att in msg.attachments)
+            attachment_line = f"Attachments: {attachments_text}"
+            content = f"{content}\n{attachment_line}".strip()
+
+        if not content:
+            return None
+
+        role = "assistant" if self.user and msg.author.id == self.user.id else "user"
+
+        # Include author name for non-bot speakers to preserve context in busy channels
+        if role == "user":
+            display_name = getattr(msg.author, "display_name", str(msg.author))
+            content = f"{display_name}: {content}"
+
+        # Trim to avoid sending excessively long history entries
+        return {"role": role, "content": content[:1000]}
 
     async def _handle_setup_flow(self, message: discord.Message, user_id: int, prefs: dict, resume: dict, content: str) -> bool:
         """Handle setup flow responses. Returns True if this was a setup response."""
