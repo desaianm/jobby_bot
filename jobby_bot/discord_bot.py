@@ -26,6 +26,7 @@ from jobby_bot.agent import (
     create_notion_entry,
     send_email,
     validate_job_url,
+    apply_to_job,
     load_prompt,
 )
 from jobby_bot.database import (
@@ -127,6 +128,27 @@ class JobbySession:
             debug_level=debug_level,
         )
 
+        web_agent = Agent(
+            name="Web Agent",
+            role="Automate job application form filling and submission via browser",
+            model=Claude(id="claude-haiku-4-5-20251001"),
+            tools=[apply_to_job, read_file],
+            instructions="""You are a browser automation agent for job applications.
+
+When asked to apply to a job:
+1. Extract user info from the resume JSON provided in context
+2. Use the apply_to_job tool with:
+   - job_url: The application URL
+   - resume_json: The user's resume data from <base_resume_json>
+   - resume_path: Path to the generated PDF resume
+   - additional_info: Any extra info like citizenship, sponsorship needs
+
+Report back success or failure with details about what was filled out.""",
+            markdown=True,
+            debug_mode=debug_mode,
+            debug_level=debug_level,
+        )
+
         # Create team with lead agent
         self.team = Team(
             name="Jobby Bot Team",
@@ -137,6 +159,7 @@ class JobbySession:
                 cover_letter_writer,
                 notion_agent,
                 email_agent,
+                web_agent,
             ],
             instructions=lead_agent_prompt,
             markdown=True,
@@ -642,11 +665,13 @@ async def start_command(interaction: discord.Interaction):
         "🔍 Search for jobs across LinkedIn, Indeed, and Google\n"
         "📄 Generate customized ATS-optimized resumes\n"
         "✍️ Write personalized cover letters\n"
+        "🤖 Auto-apply to jobs via browser automation\n"
         "📊 Track applications in Notion\n"
         "📧 Automatic job alerts via email\n\n"
         "**How to use:**\n"
         "• Use `/` slash commands for setup and configuration\n"
-        "• Send me a DM or mention me for job searches and requests\n\n"
+        "• Send me a DM or mention me for job searches and requests\n"
+        "• Say 'auto apply' or 'apply to job' for browser automation\n\n"
         "**Setup Commands:**\n"
         "• `/upload-resume` - Upload your resume (PDF/TXT)\n"
         "• `/set-preferences` - Update job search settings\n"

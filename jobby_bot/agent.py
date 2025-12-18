@@ -342,7 +342,8 @@ def create_notion_entry(
     location: str = "",
     description: str = "",
     resume_path: str = "",
-    cover_letter_path: str = ""
+    cover_letter_path: str = "",
+    status: str = "To Apply"
 ) -> str:
     """Create a job application entry in Notion database.
 
@@ -354,6 +355,7 @@ def create_notion_entry(
         description: Job description (truncated to 2000 chars)
         resume_path: Path to generated resume
         cover_letter_path: Path to generated cover letter
+        status: Application status - "To Apply", "Applied", "Interview", "Rejected", "Offer" (default: "To Apply")
 
     Returns:
         Success message with Notion page URL or error
@@ -374,7 +376,7 @@ def create_notion_entry(
             "Job Title": {"title": [{"text": {"content": job_title}}]},
             "Company": {"rich_text": [{"text": {"content": company}}]},
             "Job URL": {"url": job_url},
-            "Status": {"select": {"name": "To Apply"}},
+            "Status": {"select": {"name": status}},
         }
 
         if location:
@@ -383,6 +385,11 @@ def create_notion_entry(
             properties["Resume Path"] = {"rich_text": [{"text": {"content": resume_path}}]}
         if cover_letter_path:
             properties["Cover Letter Path"] = {"rich_text": [{"text": {"content": cover_letter_path}}]}
+
+        # Add applied date if status is "Applied"
+        if status == "Applied":
+            from datetime import datetime
+            properties["Applied Date"] = {"date": {"start": datetime.now().strftime("%Y-%m-%d")}}
 
         # Create the page
         page = notion.pages.create(
@@ -458,6 +465,103 @@ def validate_job_url(job_url: str) -> str:
         return json.dumps({"valid": False, "status": "error", "reason": f"Connection error: {str(e)[:50]}"})
     except Exception as e:
         return json.dumps({"valid": False, "status": "error", "reason": str(e)[:50]})
+
+
+@tool
+def apply_to_job(
+    job_url: str,
+    resume_json: dict,
+    resume_path: str,
+    additional_info: dict = None
+) -> str:
+    """Automatically apply to a job by filling out the application form via browser automation.
+
+    Args:
+        job_url: URL of the job application page
+        resume_json: User's resume in JSON Resume format (from context)
+        resume_path: Path to the PDF resume file to upload
+        additional_info: Optional additional info like citizenship status, sponsorship needs, etc.
+
+    Returns:
+        JSON with application result: success/failure and summary of actions
+    """
+    import json
+    import asyncio
+
+    try:
+        # Extract user info from resume JSON
+        basics = resume_json.get("basics", {})
+        location = basics.get("location", {})
+
+        # Parse name into first/last
+        full_name = basics.get("name", "")
+        name_parts = full_name.split(" ", 1)
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        # Build info dict for web agent
+        info = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": basics.get("email", ""),
+            "phone": basics.get("phone", ""),
+            "postal_code": location.get("postalCode", ""),
+            "country": location.get("countryCode", "USA"),
+            "city": location.get("city", ""),
+            "address": location.get("address", ""),
+            "state": location.get("region", ""),
+        }
+
+        # Add additional info if provided
+        if additional_info:
+            info["US_citizen"] = additional_info.get("US_citizen", True)
+            info["sponsorship_needed"] = additional_info.get("sponsorship_needed", False)
+            info["age"] = additional_info.get("age", "25")
+            info["gender"] = additional_info.get("gender", "Prefer not to say")
+            info["race"] = additional_info.get("race", "Prefer not to say")
+            info["Veteran_status"] = additional_info.get("Veteran_status", "Not a veteran")
+            info["disability_status"] = additional_info.get("disability_status", "Prefer not to say")
+        else:
+            # Defaults
+            info["US_citizen"] = True
+            info["sponsorship_needed"] = False
+
+        # Verify resume file exists
+        if not os.path.exists(resume_path):
+            return json.dumps({
+                "success": False,
+                "error": f"Resume file not found: {resume_path}",
+                "job_url": job_url
+            })
+
+        # Import and run the web agent
+        from jobby_bot.web_agent import apply_to_job_generic
+
+        # Run the async function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(apply_to_job_generic(job_url, info, resume_path))
+        finally:
+            loop.close()
+
+        return json.dumps({
+            "success": True,
+            "job_url": job_url,
+            "result": result,
+            "info_used": {
+                "name": full_name,
+                "email": info["email"],
+                "resume": resume_path
+            }
+        })
+
+    except Exception as e:
+        return json.dumps({
+            "success": False,
+            "error": str(e),
+            "job_url": job_url
+        })
 
 
 @tool
@@ -579,12 +683,33 @@ def create_agents():
         markdown=True,
     )
 
+    # Web Agent - Browser automation for job applications
+    web_agent = Agent(
+        name="Web Agent",
+        role="Automate job application form filling and submission via browser",
+        model=Claude(id="claude-haiku-4-5-20251001"),
+        tools=[apply_to_job, read_file],
+        instructions="""You are a browser automation agent for job applications.
+
+When asked to apply to a job:
+1. Extract user info from the resume JSON provided in context
+2. Use the apply_to_job tool with:
+   - job_url: The application URL
+   - resume_json: The user's resume data from <base_resume_json>
+   - resume_path: Path to the generated PDF resume
+   - additional_info: Any extra info like citizenship, sponsorship needs
+
+Report back success or failure with details about what was filled out.""",
+        markdown=True,
+    )
+
     return {
         "job_finder": job_finder,
         "resume_writer": resume_writer,
         "cover_letter_writer": cover_letter_writer,
         "notion_agent": notion_agent,
         "email_agent": email_agent,
+        "web_agent": web_agent,
     }
 
 
@@ -602,6 +727,7 @@ def create_team(agents: dict) -> Team:
             agents["cover_letter_writer"],
             agents["notion_agent"],
             agents["email_agent"],
+            agents["web_agent"],
         ],
         instructions=lead_agent_prompt,
         markdown=True,

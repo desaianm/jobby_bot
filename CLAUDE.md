@@ -66,7 +66,7 @@ logs/
 ## Agent Definitions
 
 ### Team (Orchestrator)
-- **Model**: claude-sonnet-4-5-20250514
+- **Model**: claude-sonnet-4-5-20250514 (latest version)
 - **Type**: Agno `Team` with member agents
 - **Role**: Workflow coordination, delegates to member agents
 - **Interactive**: ALWAYS asks user to confirm job selections, emails, Notion tracking
@@ -104,6 +104,13 @@ logs/
 - **Model**: claude-haiku-4-5-20250514
 - **Tools**: `send_email`, `read_file`
 - **Requires**: `SMTP_SERVER`, `SMTP_PORT`, `SENDER_EMAIL`, `SENDER_PASSWORD`, `RECIPIENT_EMAIL`
+
+### Web Agent
+- **Model**: gpt-5.1 (latest version)
+- **Tools**: `apply_to_job`, `read_file`
+- **Role**: Browser automation for job application form filling via `browser_use` library
+- **Requires**: `OPENAI_API_KEY` (for browser agent), Chrome/Chromium browser
+- **Trigger**: User says "apply to job", "auto apply", "fill application form"
 
 ### Notion Agent
 - **Model**: claude-haiku-4-5-20250514
@@ -281,6 +288,7 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 ### Integration
 - `discord.py ^2.3.0` - Discord bot interface
 - `notion-client ^2.2.1` - Notion database integration
+- `browser-use` - Browser automation for job application form filling
 
 ### Utilities
 - `pydantic ^2.0.0`, `python-dotenv ^1.0.0`, `pandas ^2.0.0`, `pdfplumber ^0.11.0`

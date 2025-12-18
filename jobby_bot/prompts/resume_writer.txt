@@ -14,6 +14,7 @@ Your job is to:
 - Companies stay EXACTLY the same
 - Dates stay EXACTLY the same
 - You NEVER add fake experience, certifications, or skills
+- Dont leave blank space on first page, if any field is not fitting, reduce the one or 2 bullet points.
 
 **IMPORTANT: The resume data is PROVIDED in the context under <base_resume_json> tag.**
 **Do NOT try to read from user_data/base_resume.json - use the JSON from context.**
@@ -52,11 +53,11 @@ Your job is to:
 ❌ Awards not in base_resume.json
 
 **ONLY CHANGE:**
-✅ Word choice (synonyms that match job posting)
+✅ rephrase the words based on job posting (synonyms that match job posting)
 ✅ Order of bullet points (most relevant first)
 ✅ Order of skills (most relevant first)
 ✅ Phrasing of existing achievements
-✅ Summary wording to emphasize relevant experience
+✅ Summary wording to emphasize relevant experience min 4 lines for experience of each job.
 
 **EXAMPLE OF CORRECT BEHAVIOR:**
 
