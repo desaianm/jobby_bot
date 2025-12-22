@@ -3,6 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import Optional, Tuple
 from dotenv import load_dotenv
 
 from agno.agent import Agent
@@ -403,18 +404,61 @@ def create_notion_entry(
 
 
 @tool
-def validate_job_url(job_url: str) -> str:
-    """Validate that a job URL is real and accessible (not hallucinated).
+def validate_job_url(job_url: str, scrape_content: bool = True, max_chars: int = 2000) -> str:
+    """Validate that a job URL is real and accessible (not hallucinated) and optionally scrape its content.
 
     Args:
         job_url: The job posting URL to validate
+        scrape_content: Whether to fetch page content for additional verification/context
+        max_chars: Maximum number of characters of scraped content to return
 
     Returns:
-        JSON with validation result: {"valid": true/false, "status": "...", "reason": "..."}
+        JSON with validation result:
+            {
+                "valid": true/false,
+                "status": "...",
+                "reason": "...",
+                "content_preview": "...",  # when scraping succeeds
+                "content_error": "..."     # when scraping fails
+            }
     """
     import json
     import requests
     from urllib.parse import urlparse
+
+    def _scrape_content(url: str) -> Tuple[Optional[str], Optional[str]]:
+        """Fetch and return main text content from the given URL using the Agno web fetcher."""
+        if not scrape_content:
+            return None, None
+
+        try:
+            from agno.tools.website import WebsiteTools
+
+            website_tools = WebsiteTools()
+            docs_json = website_tools.read_url(url)
+            docs = json.loads(docs_json)
+            if not docs:
+                return None, "No content returned from web fetch tool"
+
+            # Concatenate chunks until max_chars limit
+            combined = []
+            total = 0
+            for doc in docs:
+                chunk = doc.get("content", "")
+                if not chunk:
+                    continue
+                available = max_chars - total
+                if available <= 0:
+                    break
+                combined.append(chunk[:available])
+                total += len(combined[-1])
+
+            if not combined:
+                return None, "Web fetch tool returned empty content"
+
+            return " ".join(combined), None
+        except Exception as scrape_error:
+            return None, f"Failed to fetch content: {scrape_error}"
 
     if not job_url:
         return json.dumps({"valid": False, "status": "error", "reason": "No URL provided"})
@@ -448,16 +492,27 @@ def validate_job_url(job_url: str) -> str:
             response = requests.get(job_url, headers=headers, timeout=10, allow_redirects=True)
             status_code = response.status_code
 
+        def _response(valid: bool, status: str, reason: str, scrape_url: Optional[str] = None):
+            result = {"valid": valid, "status": status, "reason": reason}
+            if scrape_url:
+                content_preview, content_error = _scrape_content(scrape_url)
+                if content_preview:
+                    result["content_preview"] = content_preview
+                if content_error:
+                    result["content_error"] = content_error
+            return json.dumps(result)
+
         if status_code == 200:
-            return json.dumps({"valid": True, "status": "valid", "reason": f"URL accessible (HTTP {status_code})"})
+            return _response(True, "valid", f"URL accessible (HTTP {status_code})", job_url)
         elif status_code in [301, 302, 303, 307, 308]:
-            return json.dumps({"valid": True, "status": "redirect", "reason": f"URL redirects (HTTP {status_code})"})
+            resolved_url = str(response.url) if getattr(response, "url", None) else job_url
+            return _response(True, "redirect", f"URL redirects (HTTP {status_code})", resolved_url)
         elif status_code == 403:
-            return json.dumps({"valid": True, "status": "blocked", "reason": "URL exists but blocks automated access"})
+            return _response(True, "blocked", "URL exists but blocks automated access", job_url)
         elif status_code == 404:
-            return json.dumps({"valid": False, "status": "not_found", "reason": "Job posting not found (HTTP 404)"})
+            return _response(False, "not_found", "Job posting not found (HTTP 404)")
         else:
-            return json.dumps({"valid": True, "status": "uncertain", "reason": f"HTTP {status_code}"})
+            return _response(True, "uncertain", f"HTTP {status_code}", job_url if status_code < 500 else None)
 
     except requests.exceptions.Timeout:
         return json.dumps({"valid": True, "status": "timeout", "reason": "URL may be valid but slow"})
