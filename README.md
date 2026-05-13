@@ -1,8 +1,8 @@
 # 🤖 Jobby Bot
 
-> AI-powered job application automation using Claude Agent SDK
+> AI-powered job application automation using Agno multi-agent framework
 
-Jobby Bot is a multi-agent system that automates job searching, resume customization, cover letter generation, and application tracking. Built with the Claude Agent SDK, it coordinates specialized AI agents to handle every step of your job application process.
+Jobby Bot is a multi-agent system that automates job searching, resume customization, cover letter generation, browser-based auto-apply, and application tracking. Built with the **Agno** framework, it coordinates specialized AI agents via a `Team` to handle every step of your job application process.
 
 ## 🎯 Vision
 
@@ -10,47 +10,42 @@ Jobby Bot is a multi-agent system that automates job searching, resume customiza
 
 **The Solution:** An AI agent that handles the entire job application workflow end-to-end.
 
-### MVP: Assisted Application Flow
+### How It Works
 1. **Submit once** - Upload your resume and set job preferences
-2. **AI finds jobs** - Agent scrapes LinkedIn, Indeed, Google for matching positions
+2. **AI finds jobs** - Agent scrapes LinkedIn, Indeed, Google, Glassdoor, ZipRecruiter for matching positions
 3. **Smart customization** - ATS-optimized resumes and personalized cover letters generated per job
-4. **Email delivery** - Receive job matches with ready-to-submit materials
-5. **You decide** - Review and approve which applications to pursue
-
-### Future Goal: Full Automation
-The ultimate vision is a fully autonomous agent that:
-- Automatically fills out job application forms
-- Attaches customized resume and cover letter
-- Submits applications on your behalf
-- Tracks all applications in Notion
-- Sends you daily summaries of applications submitted
+4. **You decide** - Review jobs and choose which ones to apply to
+5. **Auto-apply** - Browser automation fills out application forms and submits them
+6. **Track everything** - Applications tracked in Notion, emails sent with materials
 
 **You focus on interviews. The bot handles the grind.**
 
 ## ✨ Features
 
-- 🔍 **Job Search**: Scrape jobs from LinkedIn, Indeed, and Google with advanced filtering
-- 📄 **Resume Customization**: Generate ATS-optimized resumes tailored to each job (PDF, Markdown, Text)
-- ✍️ **Cover Letters**: Create personalized, professional cover letters (PDF + Text)
-- 📧 **Email Automation**: Send job applications via email with resumes and cover letters attached
+- 🔍 **Job Search**: Scrape jobs from LinkedIn, Indeed, Google, Glassdoor, and ZipRecruiter
+- 📄 **Resume Customization**: ATS-optimized resumes tailored to each job (PDF, Markdown, Text)
+- ✍️ **Cover Letters**: Personalized cover letters per job (PDF + Text)
+- 🤖 **Auto-Apply**: Browser automation fills out and submits job application forms via `browser_use`
+- 📧 **Email Automation**: Individual and summary emails with resumes and cover letters attached
 - 📊 **Notion Tracking**: Track all applications in a Notion database
-- 💬 **Discord Integration**: Run as a Discord bot for multi-user access
-- 🚀 **Parallel Processing**: Generate materials for multiple jobs simultaneously
-- 📝 **Session Logs**: Complete tracking of all agent actions and tool calls
-- 🔄 **PDF Conversion**: Convert existing PDF resumes to JSON format automatically
+- 💬 **Discord Integration**: Multi-user Discord bot with slash commands and auto-monitoring
+- 🔄 **Auto Job Monitor**: Periodic background job checks with email alerts (configurable interval)
+- 📝 **Session Logs**: Timestamped transcripts for both CLI and Discord sessions
+- 🖨️ **PDF Generation**: Chrome CDP-based pixel-perfect PDF rendering with Calibri font
 
 ## 🏗️ Architecture
 
-Jobby Bot uses a **multi-agent architecture** with a lead orchestrator and specialized subagents:
+Jobby Bot uses a **multi-agent architecture** powered by the Agno `Team` pattern:
 
-- **Lead Agent** (Claude Sonnet 4.5): Coordinates workflow and spawns subagents
-- **Job Finder** (Claude Haiku 4.5): Searches and filters job listings
+- **Lead Agent / Team** (Claude Sonnet 4.5): Orchestrates workflow, delegates to members
+- **Job Finder** (Claude Haiku 4.5): Searches and filters job listings via JobSpy
 - **Resume Writer** (Claude Haiku 4.5): Customizes resumes with ATS optimization
 - **Cover Letter Writer** (Claude Haiku 4.5): Generates personalized cover letters
 - **Email Agent** (Claude Haiku 4.5): Sends application emails with attachments
+- **Web Agent** (GPT-5.1 via `browser_use`): Automates job application form filling
 - **Notion Agent** (Claude Haiku 4.5): Tracks applications in Notion
 
-All agents communicate through the file system (`output/` folders) and are tracked via hooks for complete observability.
+Agents communicate through the file system (`output/{user_id}/` folders) and custom `@tool` functions.
 
 ## 📦 Installation
 
@@ -83,11 +78,19 @@ All agents communicate through the file system (`output/` folders) and are track
    # Required
    ANTHROPIC_API_KEY=sk-ant-xxx
 
-   # Optional (for Notion tracking)
+   # Optional - Discord bot
+   DISCORD_BOT_TOKEN=xxx
+   ENABLE_AUTO_JOB_MONITOR=true
+   JOB_CHECK_INTERVAL_MINUTES=30
+
+   # Optional - Auto-apply (browser automation)
+   OPENAI_API_KEY=sk-xxx
+
+   # Optional - Notion tracking
    NOTION_API_KEY=secret_xxx
    NOTION_DATABASE_ID=xxx
 
-   # Optional (for email automation)
+   # Optional - Email automation
    SMTP_SERVER=smtp.gmail.com
    SMTP_PORT=587
    SENDER_EMAIL=your_email@gmail.com
@@ -228,21 +231,26 @@ poetry run python -m jobby_bot.discord_bot
 4. Each Discord user gets their own isolated session
 
 **Discord Slash Commands:**
-- `/upload-resume` - Upload resume (PDF/TXT)
-- `/set-preferences` - Update job search settings
-- `/show-resume` - View resume summary
-- `/show-preferences` - View settings
-- `/start` - Show welcome message
-- `/help` - Get detailed help
-- `/end` - End your current session
+| Command | Description |
+|---------|-------------|
+| `/upload-resume` | Upload resume (PDF/TXT) |
+| `/set-preferences` | Update job search settings |
+| `/show-resume` | View current resume summary |
+| `/show-preferences` | View settings and account info |
+| `/set-email` | Set email for job notifications |
+| `/enable-auto-monitor` | Enable automatic job alerts |
+| `/disable-auto-monitor` | Disable automatic job alerts |
+| `/start` | Show welcome message |
+| `/help` | Get detailed help |
+| `/end` | End your current session |
 
 **Auto Job Monitoring:**
-Enable automatic job checking every 30 minutes by setting:
+Enable automatic job checking with auto-apply by setting:
 ```bash
 ENABLE_AUTO_JOB_MONITOR=true
 JOB_CHECK_INTERVAL_MINUTES=30
 ```
-The bot will search for new jobs based on your preferences and email matching ones automatically.
+The bot will periodically search for new jobs, generate materials, and offer to auto-apply via browser automation.
 
 **Test Discord Setup:**
 ```bash
@@ -281,10 +289,10 @@ Find 15 remote backend engineer jobs posted in the last 48 hours
 3. **Answer Questions**: Ask about any job for details before deciding
 4. **Confirm Applications**: Bot confirms the count before generating materials
 5. **Resume & Cover Letter Generation**: Creates ATS-optimized resumes and personalized letters for selected jobs
-6. **Email (Optional)**: Bot asks if you want to send individual emails with attachments
-7. **Notion Tracking (Optional)**: Bot asks if you want to track applications in Notion
-8. **Summary Email (Optional)**: Bot asks if you want a summary email with all applications
-9. **Output Files**: Everything is saved to `output/` folders
+6. **Auto-Apply (Optional)**: Bot offers to fill out and submit applications via browser automation
+7. **Email (Optional)**: Bot asks if you want to send individual emails with attachments
+8. **Notion Tracking (Optional)**: Bot asks if you want to track applications in Notion
+9. **Summary**: Everything saved to `output/` folders, all actions logged
 
 **You're in control:** The bot asks for confirmation at each major step, so you decide what happens!
 
@@ -292,20 +300,20 @@ Find 15 remote backend engineer jobs posted in the last 48 hours
 
 ```
 output/
-├── job_listings/
-│   └── jobs_20250115_123045.csv
-├── resumes/
-│   ├── job_0_resume.md
-│   ├── job_0_resume.txt
-│   └── ...
-└── cover_letters/
-    ├── job_0_cover_letter.txt
-    └── ...
+├── {discord_user_id}/          # Per-user output (Discord mode)
+│   ├── job_listings/
+│   │   └── jobs_TIMESTAMP.csv
+│   ├── resumes/
+│   │   ├── Company_Role_resume.pdf
+│   │   ├── Company_Role_resume.txt
+│   │   └── Company_Role_resume_preview.png
+│   └── cover_letters/
+│       ├── Company_Role_cover_letter.pdf
+│       └── Company_Role_cover_letter.txt
 
 logs/
-└── session_20250115_123045/
-    ├── transcript.txt
-    └── tool_calls.jsonl
+└── session_TIMESTAMP/
+    └── transcript.txt          # Timestamped conversation log
 ```
 
 ## 📊 Notion Setup (Optional)
@@ -352,45 +360,33 @@ To track applications in Notion:
 ### Multi-Agent Coordination
 
 ```
-User Query
+User Query (CLI / Discord / Auto-Monitor)
     ↓
-Lead Agent (orchestrator)
+Team Lead (Sonnet 4.5 — orchestrator)
     ↓
-    ├─→ Job Finder Agent
-    │       ├─ Scrapes LinkedIn, Indeed, Google
-    │       ├─ Applies filters
-    │       └─ Saves to CSV
+    ├─→ Job Finder (Haiku 4.5)
+    │       ├─ Scrapes LinkedIn, Indeed, Google, Glassdoor, ZipRecruiter
+    │       └─ Saves to output/{user_id}/job_listings/
     │
-    ├─→ Resume Writer Agents (parallel)
-    │       ├─ Reads base resume
-    │       ├─ Extracts ATS keywords
-    │       └─ Generates customized resume
+    ├─→ Resume Writer (Haiku 4.5) — parallel per job
+    │       ├─ ATS keyword optimization
+    │       └─ PDF via Chrome CDP
     │
-    ├─→ Cover Letter Agents (parallel)
-    │       ├─ Analyzes job requirements
-    │       └─ Writes personalized letter
+    ├─→ Cover Letter Writer (Haiku 4.5) — parallel per job
     │
-    └─→ Notion Agent
-            ├─ Creates database entries
-            └─ Links all materials
+    ├─→ Web Agent (GPT-5.1 + browser_use)
+    │       ├─ Navigates to application URL
+    │       ├─ Fills form fields from resume JSON
+    │       └─ Uploads resume PDF and submits
+    │
+    ├─→ Email Agent (Haiku 4.5)
+    │
+    └─→ Notion Agent (Haiku 4.5)
 ```
-
-### Agent Tools
-
-Each agent has access to specific tools:
-
-- **Lead Agent**: `Task` (spawns subagents only)
-- **Job Finder**: `JobSpyTool`, `Write`, `Read`, `Glob`, `Bash`
-- **Resume Writer**: `Read`, `Write`
-- **Cover Letter**: `Read`, `Write`
-- **Notion Agent**: `NotionTool`, `Read`, `Write`, `Bash`
 
 ### Session Tracking
 
-All agent actions are tracked via hooks:
-- `PreToolUse`: Captures tool invocations with inputs
-- `PostToolUse`: Captures tool results and errors
-- Logs saved to `logs/session_*/tool_calls.jsonl`
+All conversations are logged to `logs/session_TIMESTAMP/transcript.txt` with timestamps, for both CLI and Discord sessions.
 
 ## 🔧 Configuration
 
@@ -465,8 +461,9 @@ Typical execution times (20 jobs):
 - **Job Search**: 30-60 seconds
 - **Resume Generation**: 2-3 minutes (parallel)
 - **Cover Letters**: 2-3 minutes (parallel)
+- **Auto-Apply**: 1-3 minutes per application (sequential, browser-based)
 - **Notion Tracking**: 10-20 seconds
-- **Total**: ~4-5 minutes for complete workflow
+- **Total**: ~5-10 minutes for complete workflow
 
 Cost per 20 applications: ~$0.50-$1.00 (using Haiku for subagents)
 
@@ -474,10 +471,9 @@ Cost per 20 applications: ~$0.50-$1.00 (using Haiku for subagents)
 
 Contributions welcome! Areas for improvement:
 
-- Additional job sites (ZipRecruiter, Glassdoor)
-- Resume PDF generation (currently markdown/text only)
-- Email integration for application submission
 - Interview prep agent
+- OAuth2 email authentication
+- Automated follow-up scheduling
 - Application status monitoring
 
 ## 📝 License
@@ -486,9 +482,11 @@ MIT License - see LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-- Built with [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- Built with [Agno](https://docs.agno.com/) multi-agent framework
 - Job scraping powered by [python-jobspy](https://github.com/Bunsly/JobSpy)
+- Browser automation via [browser-use](https://github.com/browser-use/browser-use)
 - Notion integration via [notion-client](https://github.com/ramnes/notion-sdk-py)
+- Discord bot via [discord.py](https://discordpy.readthedocs.io/)
 
 ## 📞 Support
 
