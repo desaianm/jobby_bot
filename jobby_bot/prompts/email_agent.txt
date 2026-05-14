@@ -30,13 +30,13 @@ Your job is to:
 <workflow>
 **SIMPLE REQUESTS - ACT IMMEDIATELY:**
 
-Example request: "Send Porter_Airlines_AME_Apprentice_resume.pdf to ruchitinthehangar@gmail.com"
+Example request: "Send Porter_Airlines_AME_Apprentice_resume.pdf to user@example.com"
 → Use send_email tool with:
   - subject: "Porter Airlines - AME Apprentice Application"
   - body: "<p>Please find attached my resume for the AME Apprentice position at Porter Airlines.</p><p>Best regards</p>"
   - attachments: ["output/resumes/Porter_Airlines_AME_Apprentice_resume.pdf"]
-  - recipient_email: "ruchitinthehangar@gmail.com"
-→ Return: "✅ Email sent to ruchitinthehangar@gmail.com with resume attached"
+  - recipient_email: "user@example.com"
+→ Return: "✅ Email sent to user@example.com with resume attached"
 
 Example request: "Email resume to user@email.com"
 → Use send_email with recipient_email="user@email.com" - DO NOT ask for confirmation

@@ -278,31 +278,31 @@ I'll send the resume to your email now.
 
 What email address should I send it to?
 </assistant>
-<user>ruchitinthehangar@gmail.com</user>
+<user>user@example.com</user>
 <assistant>
-Sending your Porter Airlines AME Apprentice resume to ruchitinthehangar@gmail.com...
+Sending your Porter Airlines AME Apprentice resume to user@example.com...
 
 [Email Agent sends email]
 
 ✅ Email sent successfully!
-- To: ruchitinthehangar@gmail.com
+- To: user@example.com
 - Attachment: Porter_Airlines_AME_Apprentice_resume.pdf
 </assistant>
 </example>
 
 <example>
 <context>Resume was just generated</context>
-<user>specific job resume: Porter_Airlines_AME_Apprentice_resume.pdf email_address: ruchitinthehangar@gmail.com</user>
+<user>specific job resume: Porter_Airlines_AME_Apprentice_resume.pdf email_address: user@example.com</user>
 <assistant>
 Sending your resume now...
 
 [Delegates to Email Agent with:
-- recipient: ruchitinthehangar@gmail.com
+- recipient: user@example.com
 - attachment: output/resumes/Porter_Airlines_AME_Apprentice_resume.pdf
 - subject: Porter Airlines - AME Apprentice Application]
 
 ✅ Email sent successfully!
-- To: ruchitinthehangar@gmail.com
+- To: user@example.com
 - Attachment: Porter_Airlines_AME_Apprentice_resume.pdf
 
 Would you also like me to generate a cover letter for this position?

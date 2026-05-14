@@ -29,7 +29,6 @@ from jobby_bot.agent import (
     apply_to_job,
     load_prompt,
 )
-from jobby_bot.utils.transcript import setup_session, TranscriptWriter
 from jobby_bot.database import (
     init_db,
     get_or_create_user,
@@ -59,11 +58,6 @@ class JobbySession:
         self.is_processing = False
         self.conversation_history: list = []  # Track recent conversation for context
         self.last_created_files: dict = {}  # Track files created in this session
-
-        # Setup session logging
-        transcript_file, session_dir = setup_session()
-        self.session_dir = session_dir
-        self.transcript = TranscriptWriter(transcript_file)
 
     async def initialize(self):
         """Initialize the Agno team."""
@@ -296,9 +290,6 @@ Job Listings: {user_output_dir}/job_listings/
             # Add user message to history
             self.conversation_history.append({"role": "user", "content": message})
 
-            # Log user message
-            self.transcript.write_to_file(f"\n[{datetime.now().strftime('%H:%M:%S')}] User: {message}\n")
-
             # Run the team synchronously in a thread pool
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -314,9 +305,6 @@ Job Listings: {user_output_dir}/job_listings/
             else:
                 response_text = str(response)
 
-            # Log agent response
-            self.transcript.write_to_file(f"\n[{datetime.now().strftime('%H:%M:%S')}] Agent: {response_text}\n")
-
             # Add assistant response to history
             self.conversation_history.append({"role": "assistant", "content": response_text})
 
@@ -326,7 +314,6 @@ Job Listings: {user_output_dir}/job_listings/
             return response_text
 
         except Exception as e:
-            self.transcript.write_to_file(f"\n[{datetime.now().strftime('%H:%M:%S')}] Error: {str(e)}\n")
             return f"❌ Error: {str(e)}"
         finally:
             self.is_processing = False
@@ -351,8 +338,6 @@ Job Listings: {user_output_dir}/job_listings/
 
     async def cleanup(self):
         """Clean up session resources."""
-        if hasattr(self, 'transcript'):
-            self.transcript.close()
         self.team = None
 
 
@@ -436,11 +421,7 @@ class JobbyBot(commands.Bot):
                     if is_remote:
                         query += " (remote positions only)"
 
-                    query += (
-                        f". Generate resumes and cover letters for matches, "
-                        f"then send individual emails for each job to {email}. "
-                        f"After that, offer to auto apply to the jobs via browser automation."
-                    )
+                    query += f". Generate resumes and cover letters for matches, then send individual emails for each job to {email}."
 
                     print(f"📋 Query for {discord_username}: {query[:100]}...")
 

@@ -41,7 +41,19 @@ jobby_bot/
 ├── tools/                # Custom tools for agents
 ├── utils/                # Shared utilities
 └── tmp/                  # Temporary scripts (auto-cleaned by agents)
+
+ui_api/                   # FastAPI backend for Job Ops UI (localhost:8000)
+├── main.py               # App entry point, CORS, lifespan init
+├── database.py           # jobs table CRUD (shares jobby_bot.db)
+├── models.py             # Pydantic: Job, JobUpdate, PipelineRequest, StatsResponse
+├── seed_mock_data.py     # Insert 10 sample jobs for local testing
+└── routes/
+    ├── jobs.py           # GET/PATCH /api/jobs, GET /api/stats
+    └── pipeline.py       # POST /api/pipeline/run (JobSpy scrape + insert)
 ```
+
+**UI API start:** `uvicorn ui_api.main:app --reload` from project root.
+**Seed data:** `python -m ui_api.seed_mock_data`
 
 ### 4. Output Structure (Per-User)
 ```
@@ -322,11 +334,30 @@ For running 24/7 on a Windows PC, see [WINDOWS_HOSTING.md](WINDOWS_HOSTING.md) -
 - Sanitize user inputs before file operations
 - Use read-only queries for database operations
 
+## Web UI (Job Ops Dashboard)
+
+Dark-themed job management UI matching the Job Ops screenshot.
+
+### Stack
+- **Backend**: FastAPI at `ui_api/` — wraps existing SQLite DB, exposes `/api/jobs`, `/api/stats`, `/api/pipeline/run`
+- **Frontend**: Next.js 14 + Tailwind at `jobby_ui/` — SWR data fetching, lucide-react icons
+
+### Run
+```bash
+# Terminal 1 — FastAPI backend (port 8000)
+uvicorn ui_api.main:app --reload
+
+# Terminal 2 — Next.js frontend (port 3000)
+cd jobby_ui && npm run dev
+```
+
+### DB
+`jobs` table added to existing `jobby_bot.db` — tracks status (discovered/ready/applied), fit_score, fit_assessment, tailored_summary. Seed: `python -m ui_api.seed_mock_data`
+
 ## Future Enhancements
 
 Potential areas for expansion:
 - Interview prep agent
-- Application status monitoring
 - Automated follow-up scheduling
 - OAuth2 email authentication
 
