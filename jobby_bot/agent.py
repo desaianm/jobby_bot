@@ -337,71 +337,105 @@ def generate_pdf_from_html(html_path: str, pdf_path: str) -> str:
 
 
 @tool
-def create_notion_entry(
+def track_application(
     job_title: str,
     company: str,
     job_url: str,
     location: str = "",
-    description: str = "",
+    salary: str = "",
     resume_path: str = "",
     cover_letter_path: str = "",
-    status: str = "To Apply"
+    status: str = "applied"
 ) -> str:
-    """Create a job application entry in Notion database.
+    """Track a job application in the local SQLite database.
 
     Args:
         job_title: Title of the job position
         company: Company name
         job_url: URL to the job posting
         location: Job location
-        description: Job description (truncated to 2000 chars)
+        salary: Salary information
         resume_path: Path to generated resume
         cover_letter_path: Path to generated cover letter
-        status: Application status - "To Apply", "Applied", "Interview", "Rejected", "Offer" (default: "To Apply")
+        status: Application status - "discovered", "ready", "applied", "interview", "rejected", "offer" (default: "applied")
 
     Returns:
-        Success message with Notion page URL or error
+        Success message with job ID or error
     """
     try:
-        from notion_client import Client
+        from ui_api.database import get_connection, VALID_STATUSES
+        from datetime import datetime
 
-        notion_api_key = os.environ.get("NOTION_API_KEY")
-        database_id = os.environ.get("NOTION_DATABASE_ID")
+        status_lower = status.lower()
+        if status_lower not in VALID_STATUSES:
+            return f"Error: Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_STATUSES))}"
 
-        if not notion_api_key or not database_id:
-            return "Error: NOTION_API_KEY or NOTION_DATABASE_ID not configured"
+        conn = get_connection()
+        now = datetime.now().isoformat()
+        try:
+            # Check if job already exists by URL to avoid duplicates
+            if job_url:
+                existing = conn.execute(
+                    "SELECT id, status FROM jobs WHERE job_url = ? AND status != 'archived'",
+                    (job_url,),
+                ).fetchone()
+                if existing:
+                    # Update existing job's status and paths
+                    updates = {"status": status_lower, "status_updated_at": now, "updated_at": now}
+                    if resume_path:
+                        updates["resume_path"] = resume_path
+                    if cover_letter_path:
+                        updates["cover_letter_path"] = cover_letter_path
+                    set_clause = ", ".join(f"{k} = ?" for k in updates)
+                    conn.execute(
+                        f"UPDATE jobs SET {set_clause} WHERE id = ?",
+                        list(updates.values()) + [existing["id"]],
+                    )
+                    conn.commit()
+                    return f"Updated job #{existing['id']} ({job_title} at {company}) — status: {status_lower}"
 
-        notion = Client(auth=notion_api_key)
-
-        # Create page properties
-        properties = {
-            "Job Title": {"title": [{"text": {"content": job_title}}]},
-            "Company": {"rich_text": [{"text": {"content": company}}]},
-            "Job URL": {"url": job_url},
-            "Status": {"select": {"name": status}},
-        }
-
-        if location:
-            properties["Location"] = {"rich_text": [{"text": {"content": location}}]}
-        if resume_path:
-            properties["Resume Path"] = {"rich_text": [{"text": {"content": resume_path}}]}
-        if cover_letter_path:
-            properties["Cover Letter Path"] = {"rich_text": [{"text": {"content": cover_letter_path}}]}
-
-        # Add applied date if status is "Applied"
-        if status == "Applied":
-            from datetime import datetime
-            properties["Applied Date"] = {"date": {"start": datetime.now().strftime("%Y-%m-%d")}}
-
-        # Create the page
-        page = notion.pages.create(
-            parent={"database_id": database_id},
-            properties=properties
-        )
-
-        return f"Created Notion entry: {page['url']}"
+            # Insert new job
+            cursor = conn.execute(
+                """INSERT INTO jobs (title, company, location, job_url, salary,
+                   status, resume_path, cover_letter_path, created_at, updated_at, status_updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (job_title, company, location, job_url, salary,
+                 status_lower, resume_path or None, cover_letter_path or None,
+                 now, now, now),
+            )
+            conn.commit()
+            job_id = cursor.lastrowid
+            return f"Tracked job #{job_id} ({job_title} at {company}) — status: {status_lower}"
+        finally:
+            conn.close()
     except Exception as e:
-        return f"Error creating Notion entry: {str(e)}"
+        return f"Error tracking application: {str(e)}"
+
+
+@tool
+def update_application_status(
+    job_id: int,
+    status: str,
+) -> str:
+    """Update the status of a tracked job application.
+
+    Args:
+        job_id: The job ID in the database
+        status: New status - "discovered", "ready", "applied", "interview", "rejected", "offer"
+
+    Returns:
+        Success or error message
+    """
+    try:
+        from ui_api.database import update_job_status
+        updated = update_job_status(job_id, status.lower())
+        if updated:
+            return f"Updated job #{job_id} status to: {status}"
+        return f"Job #{job_id} not found"
+    except ValueError as e:
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"Error updating status: {str(e)}"
 
 
 @tool
@@ -687,8 +721,6 @@ def create_agents():
     job_finder_prompt = load_prompt("job_finder.txt")
     resume_writer_prompt = load_prompt("resume_writer.txt")
     cover_letter_prompt = load_prompt("cover_letter.txt")
-    notion_agent_prompt = load_prompt("notion_agent.txt")
-
     # Job Finder Agent
     job_finder = Agent(
         name="Job Finder",
@@ -719,13 +751,18 @@ def create_agents():
         markdown=True,
     )
 
-    # Notion Agent
-    notion_agent = Agent(
-        name="Notion Agent",
-        role="Track job applications in Notion database",
+    # Tracker Agent
+    tracker_agent = Agent(
+        name="Tracker Agent",
+        role="Track job applications in the local database with status updates",
         model=Claude(id="claude-haiku-4-5-20251001"),
-        tools=[create_notion_entry, read_file],
-        instructions=notion_agent_prompt,
+        tools=[track_application, update_application_status, read_file],
+        instructions="""You track job applications in the local SQLite database.
+
+Use track_application to save new applications with their status, resume/cover letter paths.
+Use update_application_status to change a job's status (discovered, ready, applied, interview, rejected, offer).
+
+When tracking multiple jobs, process them one by one and report results.""",
         markdown=True,
     )
 
@@ -763,7 +800,7 @@ Report back success or failure with details about what was filled out.""",
         "job_finder": job_finder,
         "resume_writer": resume_writer,
         "cover_letter_writer": cover_letter_writer,
-        "notion_agent": notion_agent,
+        "tracker_agent": tracker_agent,
         "email_agent": email_agent,
         "web_agent": web_agent,
     }
@@ -781,7 +818,7 @@ def create_team(agents: dict) -> Team:
             agents["job_finder"],
             agents["resume_writer"],
             agents["cover_letter_writer"],
-            agents["notion_agent"],
+            agents["tracker_agent"],
             agents["email_agent"],
             agents["web_agent"],
         ],

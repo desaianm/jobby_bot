@@ -33,7 +33,7 @@ export default function JobCard({ job, isSelected, onClick }: JobCardProps) {
         <span
           className="block w-2 h-2 rounded-full"
           style={{
-            background: job.status === 'ready' ? 'var(--green)' : job.status === 'applied' ? 'var(--purple)' : 'var(--ink-4)',
+            background: job.status === 'offer' ? '#22c55e' : job.status === 'interview' ? 'var(--amber)' : job.status === 'applied' ? 'var(--purple)' : job.status === 'ready' ? 'var(--green)' : job.status === 'rejected' ? 'var(--red)' : 'var(--ink-4)',
           }}
         />
       </div>

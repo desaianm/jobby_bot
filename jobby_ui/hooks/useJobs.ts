@@ -9,6 +9,8 @@ const statusMap: Record<TabFilter, string | undefined> = {
   ready: 'ready',
   discovered: 'discovered',
   applied: 'applied',
+  interview: 'interview',
+  offer: 'offer',
 };
 
 export function useJobs(activeTab: TabFilter) {
@@ -33,7 +35,7 @@ export function useStats() {
   );
 
   return {
-    stats: data ?? { discovered: 0, ready: 0, applied: 0, total: 0 },
+    stats: data ?? { discovered: 0, ready: 0, applied: 0, interview: 0, rejected: 0, offer: 0, total: 0 },
     isLoading,
     isError: !!error,
     mutate,

@@ -23,7 +23,8 @@ from jobby_bot.agent import (
     screenshot_pdf,
     generate_html_from_text,
     generate_pdf_from_html,
-    create_notion_entry,
+    track_application,
+    update_application_status,
     send_email,
     validate_job_url,
     apply_to_job,
@@ -65,7 +66,6 @@ class JobbySession:
         job_finder_prompt = load_prompt("job_finder.txt")
         resume_writer_prompt = load_prompt("resume_writer.txt")
         cover_letter_prompt = load_prompt("cover_letter.txt")
-        notion_agent_prompt = load_prompt("notion_agent.txt")
         lead_agent_prompt = load_prompt("lead_agent.txt")
 
         # Check if debug mode is enabled via environment variable
@@ -106,12 +106,17 @@ class JobbySession:
             debug_level=debug_level,
         )
 
-        notion_agent = Agent(
-            name="Notion Agent",
-            role="Track job applications in Notion database",
+        tracker_agent = Agent(
+            name="Tracker Agent",
+            role="Track job applications in the local database with status updates",
             model=Claude(id="claude-haiku-4-5-20251001"),
-            tools=[create_notion_entry, read_file],
-            instructions=notion_agent_prompt,
+            tools=[track_application, update_application_status, read_file],
+            instructions="""You track job applications in the local SQLite database.
+
+Use track_application to save new applications with their status, resume/cover letter paths.
+Use update_application_status to change a job's status (discovered, ready, applied, interview, rejected, offer).
+
+When tracking multiple jobs, process them one by one and report results.""",
             markdown=True,
             debug_mode=debug_mode,
             debug_level=debug_level,
@@ -157,7 +162,7 @@ Report back success or failure with details about what was filled out.""",
                 job_finder,
                 resume_writer,
                 cover_letter_writer,
-                notion_agent,
+                tracker_agent,
                 email_agent,
                 web_agent,
             ],

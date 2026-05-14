@@ -16,13 +16,14 @@ class Job(BaseModel):
     date_posted: Optional[str] = None
     salary: Optional[str] = None
     description: Optional[str] = None
-    status: str  # discovered | ready | applied
+    status: str  # discovered | ready | applied | interview | rejected | offer
     fit_score: Optional[int] = Field(default=None, ge=0, le=100)
     fit_assessment: Optional[str] = None
     tailored_summary: Optional[str] = None
     resume_path: Optional[str] = None
     cover_letter_path: Optional[str] = None
     created_at: Optional[str] = None
+    status_updated_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -31,7 +32,7 @@ class JobUpdate(BaseModel):
     """Fields that the UI can mutate on a job record."""
 
     status: Optional[str] = Field(
-        default=None, pattern="^(discovered|ready|applied|archived)$"
+        default=None, pattern="^(discovered|ready|applied|interview|rejected|offer|archived)$"
     )
     fit_score: Optional[int] = Field(default=None, ge=0, le=100)
     fit_assessment: Optional[str] = None
@@ -66,4 +67,7 @@ class StatsResponse(BaseModel):
     discovered: int
     ready: int
     applied: int
+    interview: int
+    rejected: int
+    offer: int
     total: int

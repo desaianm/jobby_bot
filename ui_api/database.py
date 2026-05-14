@@ -12,7 +12,7 @@ from typing import Any, Optional
 # Fixed path to the existing shared SQLite database
 DB_PATH = Path(__file__).parent.parent / "jobby_bot" / "data" / "jobby_bot.db"
 
-VALID_STATUSES = {"discovered", "ready", "applied", "archived"}
+VALID_STATUSES = {"discovered", "ready", "applied", "interview", "rejected", "offer", "archived"}
 
 
 def get_connection() -> sqlite3.Connection:
@@ -45,9 +45,17 @@ def init_jobs_table() -> None:
                 resume_path TEXT,
                 cover_letter_path TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status_updated_at TIMESTAMP
             )
         """)
+        # Add status_updated_at column if missing (migration for existing DBs)
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN status_updated_at TIMESTAMP")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
         conn.commit()
     finally:
         conn.close()
@@ -118,10 +126,11 @@ def update_job_status(job_id: int, status: str) -> bool:
         raise ValueError(f"Invalid status '{status}'. Must be one of {VALID_STATUSES}.")
 
     conn = get_connection()
+    now = datetime.now().isoformat()
     try:
         cursor = conn.execute(
-            "UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?",
-            (status, datetime.now().isoformat(), job_id),
+            "UPDATE jobs SET status = ?, updated_at = ?, status_updated_at = ? WHERE id = ?",
+            (status, now, now, job_id),
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -132,6 +141,7 @@ def update_job_status(job_id: int, status: str) -> bool:
 # Allowed mutable fields for update_job_fields (guards against SQL injection)
 _MUTABLE_FIELDS = {
     "status",
+    "status_updated_at",
     "fit_score",
     "fit_assessment",
     "tailored_summary",
@@ -171,6 +181,10 @@ def update_job_fields(job_id: int, **fields: Any) -> bool:
         raise ValueError(
             f"Invalid status '{fields['status']}'. Must be one of {VALID_STATUSES}."
         )
+
+    # Auto-set status_updated_at when status changes
+    if "status" in fields:
+        fields["status_updated_at"] = datetime.now().isoformat()
 
     set_clauses = ", ".join(f"{col} = ?" for col in fields)
     values = list(fields.values()) + [datetime.now().isoformat(), job_id]
@@ -269,14 +283,17 @@ def get_job_counts() -> dict:
     """Return row counts per status and total.
 
     Returns:
-        Dict with keys: discovered, ready, applied, total.
+        Dict with keys for each non-archived status + total.
     """
     conn = get_connection()
     try:
         rows = conn.execute(
             "SELECT status, COUNT(*) as cnt FROM jobs WHERE status != 'archived' GROUP BY status"
         ).fetchall()
-        counts: dict[str, int] = {"discovered": 0, "ready": 0, "applied": 0}
+        counts: dict[str, int] = {
+            "discovered": 0, "ready": 0, "applied": 0,
+            "interview": 0, "rejected": 0, "offer": 0,
+        }
         for row in rows:
             status = row["status"]
             if status in counts:

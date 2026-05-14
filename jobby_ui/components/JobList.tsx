@@ -24,10 +24,12 @@ interface JobListProps {
 }
 
 const tabs: { key: TabFilter; label: string; statKey: keyof Stats }[] = [
-  { key: 'ready', label: 'Ready', statKey: 'ready' },
-  { key: 'discovered', label: 'New', statKey: 'discovered' },
-  { key: 'applied', label: 'Applied', statKey: 'applied' },
   { key: 'all', label: 'All', statKey: 'total' },
+  { key: 'discovered', label: 'New', statKey: 'discovered' },
+  { key: 'ready', label: 'Ready', statKey: 'ready' },
+  { key: 'applied', label: 'Applied', statKey: 'applied' },
+  { key: 'interview', label: 'Interview', statKey: 'interview' },
+  { key: 'offer', label: 'Offers', statKey: 'offer' },
 ];
 
 export default function JobList({

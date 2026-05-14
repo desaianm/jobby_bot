@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   MapPin, Calendar, DollarSign, ExternalLink, Download, CheckCircle, FileText,
-  ChevronDown, ChevronRight, Flame, Trash2, ArrowRight,
+  ChevronDown, ChevronRight, Flame, Trash2, ArrowRight, Clock,
 } from 'lucide-react';
 import { Job } from '@/lib/types';
 import StatusBadge from './StatusBadge';
@@ -12,6 +12,15 @@ interface JobDetailProps {
   job: Job | null;
   onUpdate: (id: number, data: Partial<Job>) => void;
 }
+
+const STATUS_FLOW: { value: Job['status']; label: string; bg: string; color: string; border: string }[] = [
+  { value: 'discovered', label: 'Discovered', bg: 'var(--blue-soft)', color: 'var(--blue-ink)', border: 'color-mix(in srgb, var(--blue) 30%, transparent)' },
+  { value: 'ready', label: 'Ready', bg: 'var(--green-soft)', color: 'var(--green-ink)', border: 'color-mix(in srgb, var(--green) 30%, transparent)' },
+  { value: 'applied', label: 'Applied', bg: 'var(--purple-soft)', color: 'var(--purple-ink)', border: 'color-mix(in srgb, var(--purple) 30%, transparent)' },
+  { value: 'interview', label: 'Interview', bg: 'var(--amber-soft)', color: 'var(--amber-ink)', border: 'color-mix(in srgb, var(--amber) 30%, transparent)' },
+  { value: 'offer', label: 'Offer', bg: 'rgba(34,197,94,0.1)', color: '#1a5c2a', border: 'color-mix(in srgb, #22c55e 30%, transparent)' },
+  { value: 'rejected', label: 'Rejected', bg: 'var(--red-soft)', color: 'var(--red)', border: 'color-mix(in srgb, var(--red) 30%, transparent)' },
+];
 
 function formatDescription(raw: string): string {
   return raw
@@ -100,27 +109,29 @@ export default function JobDetail({ job, onUpdate }: JobDetailProps) {
         </div>
 
         {/* Status row */}
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <StatusBadge status={job.status} />
-          {job.status !== 'discovered' && (
-            <button onClick={() => handleStatusChange('discovered')} disabled={isUpdating} className="btn-warm text-[11px] py-1 px-2 disabled:opacity-50">
-              <ArrowRight size={10} className="rotate-180" /> Discovered
-            </button>
+          {job.status_updated_at && (
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--ink-4)' }}>
+              <Clock size={10} />
+              {new Date(job.status_updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
           )}
-          {job.status !== 'ready' && job.status !== 'applied' && (
+        </div>
+
+        {/* Status flow buttons */}
+        <div className="flex items-center gap-1.5 mb-5 flex-wrap">
+          {STATUS_FLOW.filter((s) => s.value !== job.status).map((s) => (
             <button
-              onClick={() => handleStatusChange('ready')} disabled={isUpdating}
-              className="text-[11px] py-1 px-2 rounded-md font-medium border transition-colors disabled:opacity-50"
-              style={{ background: 'var(--green-soft)', color: 'var(--green-ink)', borderColor: 'color-mix(in srgb, var(--green) 30%, transparent)' }}
+              key={s.value}
+              onClick={() => handleStatusChange(s.value)}
+              disabled={isUpdating}
+              className="text-[11px] py-1 px-2.5 rounded-md font-medium border transition-colors disabled:opacity-50"
+              style={{ background: s.bg, color: s.color, borderColor: s.border }}
             >
-              <span className="flex items-center gap-1"><ArrowRight size={10} /> Mark Ready</span>
+              {s.label}
             </button>
-          )}
-          {job.status === 'ready' && (
-            <button onClick={() => handleStatusChange('discovered')} disabled={isUpdating} className="btn-warm text-[11px] py-1 px-2 disabled:opacity-50">
-              <ArrowRight size={10} className="rotate-180" /> Unmark
-            </button>
-          )}
+          ))}
         </div>
 
         {/* Fit score */}
@@ -140,22 +151,13 @@ export default function JobDetail({ job, onUpdate }: JobDetailProps) {
         )}
 
         {/* Actions grid */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <button className="btn-warm lift"><Download size={14} /> Download PDF</button>
           {job.job_url ? (
             <a href={job.job_url} target="_blank" rel="noopener noreferrer" className="btn-warm lift"><ExternalLink size={14} /> Open Listing</a>
           ) : (
             <button disabled className="btn-warm opacity-50 cursor-not-allowed"><ExternalLink size={14} /> Open Listing</button>
           )}
-          <button
-            onClick={() => handleStatusChange('applied')}
-            disabled={isUpdating || job.status === 'applied'}
-            className={`btn-accent lift ${isUpdating ? 'opacity-70' : ''} ${job.status === 'applied' ? 'opacity-70' : ''}`}
-            style={job.status === 'applied' ? { background: 'var(--purple)', borderColor: 'var(--purple)' } : {}}
-          >
-            <CheckCircle size={14} />
-            {job.status === 'applied' ? 'Applied' : isUpdating ? 'Updating...' : 'Mark Applied'}
-          </button>
         </div>
 
         {/* Fit Assessment */}
@@ -212,10 +214,6 @@ export default function JobDetail({ job, onUpdate }: JobDetailProps) {
         </button>
         {moreActionsExpanded && (
           <div className="mt-1 card-warm rounded-lg p-2 flex flex-col gap-0.5">
-            <button className="text-left text-[13px] py-1.5 px-2 rounded-md transition-colors" style={{ color: 'var(--ink-2)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-            >Track in Notion</button>
             <button className="text-left text-[13px] py-1.5 px-2 rounded-md transition-colors" style={{ color: 'var(--ink-2)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}

@@ -1,11 +1,13 @@
 'use client';
 
+import { Job } from '@/lib/types';
+
 interface StatusBadgeProps {
-  status: 'discovered' | 'ready' | 'applied' | 'archived';
+  status: Job['status'];
   className?: string;
 }
 
-const statusConfig = {
+const statusConfig: Record<Job['status'], { label: string; bg: string; color: string; border: string }> = {
   ready: {
     label: 'READY',
     bg: 'var(--green-soft)',
@@ -23,6 +25,24 @@ const statusConfig = {
     bg: 'var(--purple-soft)',
     color: 'var(--purple-ink)',
     border: 'var(--purple)',
+  },
+  interview: {
+    label: 'INTERVIEW',
+    bg: 'var(--amber-soft)',
+    color: 'var(--amber-ink)',
+    border: 'var(--amber)',
+  },
+  offer: {
+    label: 'OFFER',
+    bg: 'var(--green-soft)',
+    color: '#1a5c2a',
+    border: '#22c55e',
+  },
+  rejected: {
+    label: 'REJECTED',
+    bg: 'var(--red-soft)',
+    color: 'var(--red)',
+    border: 'var(--red)',
   },
   archived: {
     label: 'ARCHIVED',

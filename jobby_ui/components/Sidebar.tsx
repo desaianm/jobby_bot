@@ -114,9 +114,9 @@ export default function Sidebar({ view, onViewChange, stats, collapsed, onToggle
           <div className="eyebrow px-4 mt-5 mb-2">Snapshot</div>
           <div className="grid grid-cols-3 gap-2 px-3">
             {([
-              ['Ready', 'var(--green)', stats.ready],
-              ['Applied', 'var(--accent)', stats.applied],
-              ['New', 'var(--blue)', stats.discovered],
+              ['Applied', 'var(--purple)', stats.applied],
+              ['Interview', 'var(--amber)', stats.interview],
+              ['Offers', '#22c55e', stats.offer],
             ] as const).map(([label, color, n]) => (
               <div key={label} className="flex flex-col items-center py-2 rounded-lg" style={{ background: 'var(--card)' }}>
                 <span className="font-mono text-[15px] font-extrabold" style={{ color, lineHeight: 1 }}>{n}</span>

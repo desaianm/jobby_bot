@@ -1,6 +1,6 @@
 'use client';
 
-import { Layers, CheckCircle, Search, TrendingUp, ArrowRight, Flame } from 'lucide-react';
+import { Layers, CheckCircle, Search, TrendingUp, ArrowRight, Flame, MessageSquare, Trophy } from 'lucide-react';
 import { Job, Stats, View } from '@/lib/types';
 
 interface DashboardProps {
@@ -11,10 +11,12 @@ interface DashboardProps {
 }
 
 const STAT_CARDS: { key: keyof Stats; label: string; hint: string; icon: typeof Layers; tone: string }[] = [
-  { key: 'total',      label: 'Total Jobs',  hint: 'In your pipeline',    icon: Layers,      tone: 'blue' },
-  { key: 'ready',      label: 'Ready',       hint: 'Awaiting action',     icon: TrendingUp,  tone: 'green' },
-  { key: 'applied',    label: 'Applied',     hint: 'Submitted',           icon: CheckCircle, tone: 'accent' },
-  { key: 'discovered', label: 'Discovered',  hint: 'Newly scraped',       icon: Search,      tone: 'purple' },
+  { key: 'total',      label: 'Total Jobs',  hint: 'In your pipeline',    icon: Layers,        tone: 'blue' },
+  { key: 'applied',    label: 'Applied',     hint: 'Submitted',           icon: CheckCircle,   tone: 'accent' },
+  { key: 'interview',  label: 'Interview',   hint: 'In progress',         icon: MessageSquare, tone: 'amber' },
+  { key: 'offer',      label: 'Offers',      hint: 'Received',            icon: Trophy,        tone: 'green' },
+  { key: 'ready',      label: 'Ready',       hint: 'Awaiting action',     icon: TrendingUp,    tone: 'purple' },
+  { key: 'discovered', label: 'Discovered',  hint: 'Newly scraped',       icon: Search,        tone: 'blue' },
 ];
 
 const TONE_STYLES: Record<string, { gradient: string; iconBg: string; textColor: string }> = {
@@ -22,6 +24,7 @@ const TONE_STYLES: Record<string, { gradient: string; iconBg: string; textColor:
   green:  { gradient: 'linear-gradient(135deg, var(--green-soft) 0%, rgba(255,255,255,0.5) 100%)', iconBg: 'var(--green)', textColor: 'var(--green-ink)' },
   accent: { gradient: 'linear-gradient(135deg, var(--accent-soft) 0%, rgba(255,255,255,0.5) 100%)', iconBg: 'var(--accent)', textColor: '#7C3A1E' },
   purple: { gradient: 'linear-gradient(135deg, var(--purple-soft) 0%, rgba(255,255,255,0.5) 100%)', iconBg: 'var(--purple)', textColor: 'var(--purple-ink)' },
+  amber:  { gradient: 'linear-gradient(135deg, var(--amber-soft) 0%, rgba(255,255,255,0.5) 100%)', iconBg: 'var(--amber)', textColor: 'var(--amber-ink)' },
 };
 
 function getFitColor(score: number): string {
@@ -56,12 +59,12 @@ export default function Dashboard({ stats, jobs, onViewChange, onJobSelect }: Da
           The hunt is <em className="font-display" style={{ fontStyle: 'italic', color: 'var(--ink-2)' }}>on.</em>
         </h1>
         <p className="mt-2 text-[14px]" style={{ color: 'var(--ink-2)', maxWidth: 420 }}>
-          {stats.total} jobs in your pipeline. {stats.ready} ready for action, {stats.applied} already submitted.
+          {stats.total} jobs in your pipeline. {stats.applied} applied, {stats.interview} interviewing, {stats.offer} offers.
         </p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6 stagger-children">
+      <div className="grid grid-cols-3 gap-4 mb-6 stagger-children">
         {STAT_CARDS.map((card) => {
           const tone = TONE_STYLES[card.tone];
           const Icon = card.icon;
@@ -167,7 +170,7 @@ export default function Dashboard({ stats, jobs, onViewChange, onJobSelect }: Da
                   <div
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{
-                      background: job.status === 'ready' ? 'var(--green)' : job.status === 'applied' ? 'var(--purple)' : 'var(--ink-4)',
+                      background: job.status === 'offer' ? '#22c55e' : job.status === 'interview' ? 'var(--amber)' : job.status === 'applied' ? 'var(--purple)' : job.status === 'ready' ? 'var(--green)' : job.status === 'rejected' ? 'var(--red)' : 'var(--ink-4)',
                     }}
                   />
                   <div className="min-w-0 flex-1">
