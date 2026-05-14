@@ -269,6 +269,8 @@ def generate_resume_html(content: str) -> str:
             margin: 14pt 0 6pt 0;
             padding: 0 0 2pt 0;
             border-bottom: 1px solid #000;
+            page-break-after: avoid;
+            break-after: avoid;
         }}
 
         /* SUMMARY: Justified paragraph */
@@ -357,10 +359,9 @@ def generate_resume_html(content: str) -> str:
             margin: 0 0 2pt 0;
         }}
 
-        /* SECTION CONTAINERS: Keep each section together on same page */
+        /* SECTION CONTAINERS: Allow long sections to flow across pages.
+           Individual job-entry blocks still stay together (see below). */
         .section-container {{
-            page-break-inside: avoid;
-            break-inside: avoid;
         }}
 
         /* JOB ENTRIES: Keep job title + bullets together */
