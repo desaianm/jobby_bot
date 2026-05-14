@@ -3,6 +3,9 @@
 *.env
 !.env.example
 data/
+.next/
+.claude/
+node_modules/
 user_data/
 # Python
 __pycache__/

@@ -133,6 +133,7 @@ def search_jobs(
                 "site": str(row.get("site", "")),
                 "date_posted": str(row.get("date_posted", "")),
                 "description_preview": str(row.get("description", ""))[:300],
+                "description": str(row.get("description", "")),
                 "is_remote": bool(row.get("is_remote", False)),
             }
 
